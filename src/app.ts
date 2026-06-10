@@ -3,9 +3,7 @@ import webhookRoutes from './routes/webhook.routes';
 import apiKeyRoute from './routes/api-key.routes';
 import loginRoute from './routes/login-auth.routes';
 import tunnelRoutes from './routes/tunnels.routes';
-import companyRoute from './routes/inviteCompany.routes';
 import inviteUserRoute from './routes/inviteUser.routes';
-import updateCompanyRoute from './routes/updateCompany.route';
 import updateUserRoute from './routes/updateUser.route';
 import createTunnelRoute from './routes/createTunnel.route';
 import bitrixRoutes from './routes/bitrixHandler.routes';
@@ -28,14 +26,6 @@ declare module "express-session"
 {
   interface SessionData
   {
-    inviteCompany : {
-      companyName : string
-    }
-    invitedManager : {
-      email : string,
-      firstName : string,
-      lastName : string
-    }
     invitedUser : {
       email : string,
       firstName : string,
@@ -181,22 +171,12 @@ function AddAdminRoutes(app: express.Express)
   });
 
   app.get('/admin/invite/company', (req: Request, res: Response) => {
-    res.render('invite-company', { title: 'Invite Company', user: req.user });  
-  });
+  res.status(404).render('error', { title: 'Not Found', message: 'Company invite UI removed', user: req.user });
+});
 
-  app.get('/admin/invite/company/success' , (req: Request, res: Response) => 
-    {
-      if(req.session.inviteCompany)
-      {
-        let invitedManager = req.session.invitedManager;
-        res.render('invite-company-success', { title: 'Invite Company Success', user: req.user, companyName: req.session?.inviteCompany.companyName, invitedManager});
-        //Clear the session data
-        req.session.inviteCompany = undefined;
-        req.session.invitedManager = undefined;
-        
-      }
-    
-  });
+app.get('/admin/invite/company/success' , (req: Request, res: Response) => {
+  res.status(404).render('error', { title: 'Not Found', message: 'Company invite UI removed', user: req.user });
+});
 
   app.get('/admin/invite/user/success' , (req: Request, res: Response) =>
   {
