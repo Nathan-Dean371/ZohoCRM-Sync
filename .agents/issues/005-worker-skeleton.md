@@ -6,9 +6,9 @@ Add a BullMQ worker skeleton and job processing pipeline:
 - Provides clear error semantics for retry vs permanent failure.
 
 ## Acceptance criteria
-- [ ] Worker process connects to Redis and consumes jobs.
-- [ ] Token manager integrated for API calls.
-- [ ] Errors are classified for retry vs DLQ movement.
+- [x] Worker process connects to Redis and consumes jobs.
+- [x] Token manager integrated for API calls.
+- [x] Errors are classified for retry vs DLQ movement.
 
 ## Blocked by
 - [ ] [Webhook ingress](https://github.com/Nathan-Dean371/OCTOtoCRM/issues/3)

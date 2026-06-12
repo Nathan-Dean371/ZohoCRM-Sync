@@ -1,12 +1,16 @@
 import { WebhookEvent, VentrataBooking, CleanContact, CleanBooking } from '../../types/ventrata';
 import { ZohoContact, ZohoVentrataBooking } from '../../types/zoho';
 import ZohoCRMService from '../zoho/zoho-crm-service';
+import { idempotencyService, IdempotencyService } from '../database/idempotency-service';
 
 class VentrataWebhookHandler {
     private readonly zohoService: ZohoCRMService;
 
-    constructor() {
-        this.zohoService = new ZohoCRMService();
+    constructor(
+        private readonly idService: IdempotencyService = idempotencyService,
+        zohoService?: ZohoCRMService
+    ) {
+        this.zohoService = zohoService || new ZohoCRMService();
     }
 
     /**
@@ -15,19 +19,26 @@ class VentrataWebhookHandler {
      */
     async handleWebhook(event: WebhookEvent): Promise<void> {
         try {
-
-            //API key check
-
-
             console.log('Received webhook event:', {
                 type: event.webhook.event,
-                bookingStatus: event.booking?.status
+                bookingStatus: event.booking?.status,
+                uuid: event.booking?.uuid
             });
 
             // Only process booking_update events for confirmed bookings
             if (event.webhook.event !== 'booking_update' || event.booking?.status !== 'CONFIRMED') {
                 console.log('Skipping webhook - not a confirmed booking update');
                 return;
+            }
+
+            const ventrataUuid = event.booking.uuid;
+
+            // Check idempotency - has this booking already been processed successfully?
+            const existingZohoId = await this.idService.getZohoId(ventrataUuid);
+            if (existingZohoId) {
+                console.log(`Booking ${ventrataUuid} already processed (Zoho ID: ${existingZohoId}). Updating record...`);
+                // We proceed with processing to allow updates to the record, 
+                // but the upsert logic handles the technical idempotency.
             }
 
             await this.processConfirmedBooking(event.booking);
@@ -47,7 +58,7 @@ class VentrataWebhookHandler {
         // Step 1: Extract contact information from the booking
         const contactData = this.extractContactData(booking);
 
-        // Step 2: Create or update the contact in Zoho
+        // Step 2: Create or update the contact in Zoho (with email/phone fallback)
         const zohoContact = await this.zohoService.upsertContact({
             First_Name: contactData.First_Name,
             Last_Name: contactData.Last_Name,
@@ -61,12 +72,12 @@ class VentrataWebhookHandler {
             email: zohoContact.Email
         });
 
-        // Step 3: Create the booking record in Zoho
+        // Step 3: Create or update the booking record in Zoho (idempotent by Booking_Ref)
         const bookingData = this.extractBookingData(booking);
 
         const bookingName = booking.utcConfirmedAt + " - " +  bookingData.productName;
 
-        const zohoBooking = await this.zohoService.createBooking({
+        const zohoBooking = await this.zohoService.upsertBooking({
             Name: bookingName,
             Booking_Ref: booking.uuid,
             Contact_Id: zohoContact.id,  // Link to the contact
@@ -75,10 +86,16 @@ class VentrataWebhookHandler {
             Travel_Date: bookingData.travelDate
         });
 
-        console.log('Booking created in Zoho:', {
+        console.log('Booking processed in Zoho:', {
             id: zohoBooking.id,
             ref: zohoBooking.Booking_Ref
         });
+
+        // Step 4: Update Idempotency Map
+        if (zohoBooking.id) {
+            await this.idService.saveMapping(booking.uuid, zohoBooking.id);
+            console.log(`Idempotency map updated for booking ${booking.uuid} -> ${zohoBooking.id}`);
+        }
     }
 
     /**

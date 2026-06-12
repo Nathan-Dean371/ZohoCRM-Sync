@@ -6,9 +6,9 @@ Implement contact upsert and booking upsert logic used by the worker:
 - Update `IdempotencyMap` on successful upsert.
 
 ## Acceptance criteria
-- [ ] Contact upsert works by email/phone fallback.
-- [ ] Booking upsert uses `Ventrata_Booking_UUID` and is idempotent.
-- [ ] `IdempotencyMap` updated accordingly.
+- [x] Contact upsert works by email/phone fallback.
+- [x] Booking upsert uses `Ventrata_Booking_UUID` and is idempotent.
+- [x] `IdempotencyMap` updated accordingly.
 
 ## Blocked by
 - [ ] [Worker skeleton](https://github.com/Nathan-Dean371/OCTOtoCRM/issues/6)

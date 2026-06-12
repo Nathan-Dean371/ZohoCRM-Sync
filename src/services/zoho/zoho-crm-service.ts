@@ -1,15 +1,11 @@
 import axios, { AxiosInstance } from 'axios';
 import { ZohoContact, ZohoVentrataBooking, ZohoApiResponse, ZohoApiResponseData } from '../../types/zoho';
-import ZohoAuthService from './zoho-auth';
-import { integrationDataService } from '../integrations/integration-config-service';
+import { zohoTokenManager, ZohoTokenManager } from './zoho-token-manager';
 
 class ZohoCRMService {
     private readonly client: AxiosInstance;
-    private readonly authService: ZohoAuthService;
 
-    constructor() {
-        this.authService = new ZohoAuthService();
-        
+    constructor(private readonly tokenManager: ZohoTokenManager = zohoTokenManager) {
         // Get and validate API domain
         const apiDomain = process.env.ZOHO_API_DOMAIN;
         if (!apiDomain) {
@@ -22,15 +18,9 @@ class ZohoCRMService {
         
         this.client = axios.create({ baseURL });
     
-        // Add auth token and content type interceptor
+        // Add content type interceptor
         this.client.interceptors.request.use(async (config) => {
-            const configRecord = await integrationDataService.getIntegrationConfig();
-            if (!configRecord?.zoho_refresh_token) {
-                throw new Error('Zoho is not connected. Please connect Zoho in Admin dashboard.');
-            }
-            const token = await this.authService.getAccessToken(configRecord.zoho_refresh_token);
             config.headers = config.headers || {};
-            config.headers['Authorization'] = `Zoho-oauthtoken ${token}`;
             config.headers['Content-Type'] = 'application/json';
             
             // Log outgoing request (without sensitive data)
@@ -110,7 +100,7 @@ class ZohoCRMService {
     }
 
     async createContact(contact: Omit<ZohoContact, 'id'>): Promise<ZohoContact> {
-        try {
+        return this.tokenManager.withZohoToken(async (token) => {
             console.log('Creating contact:', {
                 firstName: contact.First_Name,
                 lastName: contact.Last_Name,
@@ -129,7 +119,12 @@ class ZohoCRMService {
 
             const response = await this.client.post<ZohoApiResponse<ZohoApiResponseData>>(
                 '/Contacts',
-                payload
+                payload,
+                {
+                    headers: {
+                        'Authorization': `Zoho-oauthtoken ${token}`
+                    }
+                }
             );
     
             console.log('Contact creation response:', {
@@ -150,14 +145,11 @@ class ZohoCRMService {
                 id: result.details.id,
                 ...contact
             };
-        } catch (error) {
-            // The enhanceError interceptor will handle error transformation
-            throw error;
-        }
+        });
     }
 
     async createBooking(booking: Omit<ZohoVentrataBooking, 'id'>): Promise<ZohoVentrataBooking> {
-        try {
+        return this.tokenManager.withZohoToken(async (token) => {
             console.log('Creating booking:', {
                 bookingRef: booking.Booking_Ref,
                 contactId: booking.Contact_Id,
@@ -165,9 +157,14 @@ class ZohoCRMService {
             });
 
             const response = await this.client.post<ZohoApiResponse<ZohoApiResponseData>>(
-                '/Bookings',  // Updated to use correct module name
+                '/Bookings',
                 {
                     data: [booking]
+                },
+                {
+                    headers: {
+                        'Authorization': `Zoho-oauthtoken ${token}`
+                    }
                 }
             );
     
@@ -189,10 +186,100 @@ class ZohoCRMService {
                 id: result.details.id,
                 ...booking
             };
+        });
+    }
+
+    async upsertBooking(booking: Omit<ZohoVentrataBooking, 'id'>): Promise<ZohoVentrataBooking> {
+        try {
+            console.log('Checking for existing booking with ref:', booking.Booking_Ref);
+            const existingBooking = await this.findBookingByRef(booking.Booking_Ref);
+
+            if (existingBooking) {
+                console.log('Found existing booking:', {
+                    id: existingBooking.id,
+                    ref: existingBooking.Booking_Ref
+                });
+
+                return await this.updateBooking(existingBooking.id!, booking);
+            }
+
+            console.log('No existing booking found, creating new booking');
+            return await this.createBooking(booking);
         } catch (error) {
-            // The enhanceError interceptor will handle error transformation
+            console.error('Failed to upsert booking:', error);
             throw error;
         }
+    }
+
+    async updateBooking(id: string, booking: Partial<ZohoVentrataBooking>): Promise<ZohoVentrataBooking> {
+        return this.tokenManager.withZohoToken(async (token) => {
+            console.log(`Updating booking with ID: ${id}`);
+
+            const response = await this.client.put<ZohoApiResponse<ZohoApiResponseData>>(
+                `/Bookings/${id}`,
+                {
+                    data: [booking]
+                },
+                {
+                    headers: {
+                        'Authorization': `Zoho-oauthtoken ${token}`
+                    }
+                }
+            );
+
+            if (!response.data.data?.[0]) {
+                throw new Error('No data returned from Zoho CRM');
+            }
+    
+            const result = response.data.data[0];
+            if (result.code !== 'SUCCESS') {
+                throw new Error(`Failed to update booking: ${result.message}`);
+            }
+
+            return {
+                id,
+                ...booking
+            } as ZohoVentrataBooking;
+        });
+    }
+
+    async findBookingByRef(ref: string): Promise<ZohoVentrataBooking | null> {
+        return this.tokenManager.withZohoToken(async (token) => {
+            try {
+                console.log('Searching for booking with ref:', ref);
+                
+                const response = await this.client.get('/Bookings/search', {
+                    params: {
+                        criteria: `(Booking_Ref:equals:${ref})`
+                    },
+                    headers: {
+                        'Authorization': `Zoho-oauthtoken ${token}`
+                    }
+                });
+        
+                if (!response.data.data || response.data.data.length === 0) {
+                    console.log('No booking found with ref:', ref);
+                    return null;
+                }
+        
+                const bookingData = response.data.data[0];
+                return {
+                    id: bookingData.id,
+                    Name: bookingData.Name,
+                    Booking_Ref: bookingData.Booking_Ref,
+                    Contact_Id: bookingData.Contact_Id,
+                    Booking_Date: bookingData.Booking_Date,
+                    Product: bookingData.Product,
+                    Travel_Date: bookingData.Travel_Date
+                };
+        
+            } catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 404) {
+                    return null;
+                }
+                throw error;
+            }
+        });
     }
 
     async upsertContact(contact: Omit<ZohoContact, 'id'>): Promise<ZohoContact> {
@@ -201,12 +288,18 @@ class ZohoCRMService {
             const emailForSearch = contact.Email ?? null;
             
             console.log('Checking for existing contact with email:', emailForSearch);
-            const existingContact = await this.findContactByEmail(emailForSearch);
+            let existingContact = await this.findContactByEmail(emailForSearch);
+
+            if (!existingContact && contact.Phone) {
+                console.log('No contact found by email, checking for existing contact with phone:', contact.Phone);
+                existingContact = await this.findContactByPhone(contact.Phone);
+            }
 
             if (existingContact) {
                 console.log('Found existing contact:', {
                     id: existingContact.id,
-                    email: existingContact.Email
+                    email: existingContact.Email,
+                    phone: existingContact.Phone
                 });
 
                 if(existingContact.id === undefined) {
@@ -228,7 +321,7 @@ class ZohoCRMService {
     }
 
     private async updateContact(id: string, contact: Partial<ZohoContact>): Promise<ZohoContact> {
-        try {
+        return this.tokenManager.withZohoToken(async (token) => {
             console.log(`Updating contact with ID: ${id}`);
 
             // Create a clean contact object without undefined values
@@ -244,18 +337,28 @@ class ZohoCRMService {
                 `/Contacts/${id}`,
                 {
                     data: [contactData]
+                },
+                {
+                    headers: {
+                        'Authorization': `Zoho-oauthtoken ${token}`
+                    }
                 }
             );
 
-            // ... rest of the method
+            if (!response.data.data?.[0]) {
+                throw new Error('No data returned from Zoho CRM');
+            }
+    
+            const result = response.data.data[0];
+            if (result.code !== 'SUCCESS') {
+                throw new Error(`Failed to update contact: ${result.message}`);
+            }
+
             return {
                 id,
                 ...contactData
             } as ZohoContact;
-        } catch (error) {
-            console.error(`Failed to update contact ${id}:`, error);
-            throw error;
-        }
+        });
     }
 
     async findContactByEmail(email: string | null): Promise<ZohoContact | null> {
@@ -264,45 +367,102 @@ class ZohoCRMService {
             return null;
         }
     
-        try {
-            console.log('Searching for contact with email:', email);
-            
-            const response = await this.client.get('/Contacts/search', {
-                params: {
-                    criteria: `(Email:equals:${email})`
+        return this.tokenManager.withZohoToken(async (token) => {
+            try {
+                console.log('Searching for contact with email:', email);
+                
+                const response = await this.client.get('/Contacts/search', {
+                    params: {
+                        criteria: `(Email:equals:${email})`
+                    },
+                    headers: {
+                        'Authorization': `Zoho-oauthtoken ${token}`
+                    }
+                });
+        
+                if (!response.data.data || response.data.data.length === 0) {
+                    console.log('No contact found with email:', email);
+                    return null;
                 }
-            });
-    
-            if (!response.data.data || response.data.data.length === 0) {
-                console.log('No contact found with email:', email);
-                return null;
-            }
-    
-            const contactData = response.data.data[0];
-            const contact: ZohoContact = {
-                id: contactData.id,
-                First_Name: contactData.First_Name,
-                Last_Name: contactData.Last_Name,
-                Email: contactData.Email,
-                Phone: contactData.Phone,
-                Country: contactData.Country
-            };
+        
+                const contactData = response.data.data[0];
+                const contact: ZohoContact = {
+                    id: contactData.id,
+                    First_Name: contactData.First_Name,
+                    Last_Name: contactData.Last_Name,
+                    Email: contactData.Email,
+                    Phone: contactData.Phone,
+                    Country: contactData.Country
+                };
 
-            console.log('Found existing contact:', {
-                id: contact.id,
-                email: contact.Email
-            });
-    
-            return contact;
-    
-        } catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 404) {
-                console.log('No contact found with email:', email);
-                return null;
+                console.log('Found existing contact:', {
+                    id: contact.id,
+                    email: contact.Email
+                });
+        
+                return contact;
+        
+            } catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 404) {
+                    console.log('No contact found with email:', email);
+                    return null;
+                }
+                console.error('Error searching for contact:', error);
+                throw error;
             }
-            console.error('Error searching for contact:', error);
-            throw error;
+        });
+    }
+
+    async findContactByPhone(phone: string | null): Promise<ZohoContact | null> {
+        if (!phone) {
+            console.log('No phone provided for contact search');
+            return null;
         }
+    
+        return this.tokenManager.withZohoToken(async (token) => {
+            try {
+                console.log('Searching for contact with phone:', phone);
+                
+                const response = await this.client.get('/Contacts/search', {
+                    params: {
+                        criteria: `(Phone:equals:${phone})`
+                    },
+                    headers: {
+                        'Authorization': `Zoho-oauthtoken ${token}`
+                    }
+                });
+        
+                if (!response.data.data || response.data.data.length === 0) {
+                    console.log('No contact found with phone:', phone);
+                    return null;
+                }
+        
+                const contactData = response.data.data[0];
+                const contact: ZohoContact = {
+                    id: contactData.id,
+                    First_Name: contactData.First_Name,
+                    Last_Name: contactData.Last_Name,
+                    Email: contactData.Email,
+                    Phone: contactData.Phone,
+                    Country: contactData.Country
+                };
+
+                console.log('Found existing contact by phone:', {
+                    id: contact.id,
+                    phone: contact.Phone
+                });
+        
+                return contact;
+        
+            } catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 404) {
+                    console.log('No contact found with phone:', phone);
+                    return null;
+                }
+                console.error('Error searching for contact by phone:', error);
+                throw error;
+            }
+        });
     }
 }
 
