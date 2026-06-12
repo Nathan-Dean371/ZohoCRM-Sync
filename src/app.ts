@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Express, Request, Response, NextFunction } from 'express';
 import webhookRoutes from './routes/webhook.routes';
 import apiKeyRoute from './routes/api-key.routes';
@@ -9,6 +10,7 @@ import createTunnelRoute from './routes/createTunnel.route';
 import bitrixRoutes from './routes/bitrixHandler.routes';
 import acceptInviteRoute from './routes/join.routes';
 import { authMiddleware } from './middleware/auth';
+import { errorHandler } from './middleware/errorHandler';
 import prismaClientInstance, { connectToDatabase } from './services/database/databaseConnector';
 import path from 'path';
 import { userAuthMiddleware } from './middleware/user-auth';
@@ -21,6 +23,8 @@ import { User } from './types/users';
 import { create } from 'domain';
 import managerRoutes from './routes/manager.routes';
 import managerTunnelsRouter from './routes/managerTunnels.routes';
+import ZohoAuthService from './services/zoho/zoho-auth';
+import { integrationDataService } from './services/integrations/integration-config-service';
 
 declare module "express-session"
 {
@@ -63,6 +67,7 @@ connectToDatabase();
 //#region Routes
 // Mount the API key check route
 app.use('/api/', apiKeyRoute)
+app.use('/api', webhookRoutes);
 app.post('/api/:id/webhook', (req: Request, res: Response) =>
 {
   console.log("Received webhook");
@@ -76,9 +81,9 @@ AddManagerRoutes(app);
 // Routes will be added here
 // app.use('/api/v1', routes);
 app.use('/', loginRoute);
-app.use('/', companyRoute);
+// app.use('/', companyRoute);
 app.use('/', inviteUserRoute);
-app.use('/', updateCompanyRoute);
+// app.use('/', updateCompanyRoute);
 app.use('/', updateUserRoute); // Add this line
 app.use('/', createTunnelRoute);
 app.use('/', bitrixRoutes);
@@ -92,11 +97,8 @@ app.post('/logout', (req: Request, res: Response) => {
   res.redirect('/');
 });
 
-// Basic error handling middleware
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    console.error(err.stack);
-    res.status(500).send('Something broke!');
-  });
+// Use the robust error handling middleware
+app.use(errorHandler);
 
 // Basic health check endpoint
 app.get('/health', (req: Request, res: Response) => {
@@ -140,6 +142,10 @@ function EnableMiddleware(app: express.Express)
 // Apply auth middleware to all API routes
 function EnableAuthMiddleware(app: express.Express)
 {
+  // Mount the webhook route BEFORE auth middleware to exempt it from X-API-Key requirement
+  // It has its own X-Webhook-Secret validation in the controller
+  app.use('/api', webhookRoutes);
+  
   app.use('/api', authMiddleware);
   app.use('/', userAuthMiddleware);
 }
@@ -289,6 +295,60 @@ app.delete('/admin/dashboard/tunnels/:id', async (req: Request, res: Response) =
         });
     }
 });
+
+  app.get('/admin/dashboard/integrations/zoho', async (req: Request, res: Response) => {
+    try {
+        const isConnected = await integrationDataService.hasZohoRefreshToken();
+        res.render('admin-zoho-integration', { 
+            title: 'Zoho Integration', 
+            user: req.user,
+            isConnected,
+            error: req.query.error,
+            success: req.query.success
+        });
+    } catch (error) {
+        console.error('Error loading Zoho integration status:', error);
+        res.status(500).render('error', { title: 'Error', message: 'Error loading integration status', user: req.user });
+    }
+  });
+
+  app.get('/admin/dashboard/integrations/zoho/auth', (req: Request, res: Response) => {
+    const zohoAuth = new ZohoAuthService();
+    res.redirect(zohoAuth.getAuthorizationUrl());
+  });
+
+  app.get('/admin/dashboard/integrations/zoho/callback', async (req: Request, res: Response) => {
+    const { code, error } = req.query;
+
+    if (error) {
+        return res.redirect(`/admin/dashboard/integrations/zoho?error=${error}`);
+    }
+
+    if (!code) {
+        return res.redirect('/admin/dashboard/integrations/zoho?error=No code provided');
+    }
+
+    try {
+        const zohoAuth = new ZohoAuthService();
+        const tokens = await zohoAuth.exchangeCodeForTokens(code as string);
+
+        // Store the refresh token and metadata
+        await integrationDataService.saveIntegrationConfig({
+            zoho_refresh_token: tokens.refresh_token,
+            access_token: tokens.access_token,
+            expires_at: new Date(tokens.expires_at!),
+            token_metadata: {
+                api_domain: tokens.api_domain,
+                token_type: tokens.token_type
+            }
+        });
+
+        res.redirect('/admin/dashboard/integrations/zoho?success=true');
+    } catch (err) {
+        console.error('Error during Zoho OAuth callback:', err);
+        res.redirect(`/admin/dashboard/integrations/zoho?error=${encodeURIComponent((err as Error).message)}`);
+    }
+  });
   //#endregion
 }
 

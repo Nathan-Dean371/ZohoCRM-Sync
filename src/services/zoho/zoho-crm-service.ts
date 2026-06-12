@@ -1,6 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { ZohoContact, ZohoVentrataBooking, ZohoApiResponse, ZohoApiResponseData } from '../../types/zoho';
 import ZohoAuthService from './zoho-auth';
+import { integrationDataService } from '../integrations/integration-config-service';
 
 class ZohoCRMService {
     private readonly client: AxiosInstance;
@@ -23,7 +24,11 @@ class ZohoCRMService {
     
         // Add auth token and content type interceptor
         this.client.interceptors.request.use(async (config) => {
-            const token = await this.authService.getAccessToken();
+            const configRecord = await integrationDataService.getIntegrationConfig();
+            if (!configRecord?.zoho_refresh_token) {
+                throw new Error('Zoho is not connected. Please connect Zoho in Admin dashboard.');
+            }
+            const token = await this.authService.getAccessToken(configRecord.zoho_refresh_token);
             config.headers = config.headers || {};
             config.headers['Authorization'] = `Zoho-oauthtoken ${token}`;
             config.headers['Content-Type'] = 'application/json';

@@ -1,11 +1,35 @@
-// src/controllers/webhook-controller.ts
+import { Request, Response, RequestHandler } from 'express';
 import { WebhookEvent } from '../types/ventrata';
 import { ventrataBookingCleaner } from '../utils/ventrataBookingCleaner';
 import ZohoCRMService from '../services/zoho/zoho-crm-service';
 import { ZohoVentrataBooking } from '../types/zoho';
+import { integrationDataService } from '../services/integrations/integration-config-service';
+import { ventrataWebhookQueue } from '../services/queue';
 
-const crmService = new ZohoCRMService();
+export const processVentrataWebhook: RequestHandler = async (req, res) => {
+    const xWebhookSecret = req.get('X-Webhook-Secret');
+    const ventrataWebhookSecret = await integrationDataService.getVentrataWebhookSecret();
+
+    if (!ventrataWebhookSecret || xWebhookSecret !== ventrataWebhookSecret) {
+        res.status(401).send('Unauthorized: Invalid or missing X-Webhook-Secret');
+        return;
+    }
+
+    // Persist to Webhook_Logs
+    await integrationDataService.createWebhookLog({
+        payload: req.body,
+        status: 'RECEIVED'
+    });
+
+    // Respond immediately to Ventrata
+    res.status(200).send('Webhook received and acknowledged');
+
+    // Enqueue the job for background processing
+    await ventrataWebhookQueue.add('process-ventrata-webhook', req.body);
+};
+
 export async function handleBookingWebhook(webhookEvent: WebhookEvent) {
+    const crmService = new ZohoCRMService();
     if (webhookEvent.booking?.status !== 'CONFIRMED') {
         return;
     }

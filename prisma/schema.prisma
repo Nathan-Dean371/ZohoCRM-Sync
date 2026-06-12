@@ -98,6 +98,41 @@ model tunnel_credentials {
   tunnels               tunnels  @relation(fields: [tunnel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "tunnel_id")
 }
 
+model IntegrationConfig {
+  id                    String   @id @default("singleton") @db.VarChar(32)
+  ventrata_webhook_secret String?  @db.VarChar(255)
+  zoho_refresh_token     String?  @db.Text
+  access_token           String?  @db.Text
+  expires_at             DateTime? @db.Timestamptz(6)
+  token_metadata         Json?    @db.JsonB
+  created_at             DateTime @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("integration_config")
+}
+
+model WebhookLog {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  payload       Json      @db.JsonB
+  status        String    @db.VarChar(20)
+  attempts      Int       @default(0)
+  last_error    String?
+  dlq_ref       String?
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  processed_at  DateTime? @db.Timestamptz(6)
+
+  @@map("webhook_logs")
+}
+
+model IdempotencyMap {
+  ventrata_uuid  String    @id @db.VarChar(100)
+  zoho_record_id  String    @unique(map: "idempotency_map_zoho_record_id_key") @db.VarChar(100)
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@map("idempotency_map")
+}
+
 enum invitation_status {
   PENDING
   ACCEPTED
