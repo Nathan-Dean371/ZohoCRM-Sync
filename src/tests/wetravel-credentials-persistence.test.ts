@@ -1,5 +1,6 @@
 import { createIntegrationDataService, IntegrationDataStore } from '../services/integrations/integration-config-service';
 import prisma from '../services/database/databaseConnector';
+import { Prisma } from '@prisma/client';
 
 describe('WeTravel Credential Persistence - Slice 1', () => {
     const testApiKey = 'wetravel_key_test_12345';
@@ -21,6 +22,9 @@ describe('WeTravel Credential Persistence - Slice 1', () => {
                 wetravel_key_iv: null,
                 wetravel_key_auth_tag: null,
                 wetravel_key_algorithm: null,
+                wetravel_access_token: null,
+                wetravel_access_token_expires_at: null,
+                wetravel_token_metadata: Prisma.JsonNull,
                 wetravel_status: null,
                 wetravel_status_error: null
             }

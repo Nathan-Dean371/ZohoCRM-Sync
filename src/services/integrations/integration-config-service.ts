@@ -18,6 +18,9 @@ export interface IntegrationConfigRecord {
     wetravel_key_iv: string | null;
     wetravel_key_auth_tag: string | null;
     wetravel_key_algorithm: string | null;
+    wetravel_access_token: string | null;
+    wetravel_access_token_expires_at: Date | null;
+    wetravel_token_metadata: unknown | null;
     wetravel_status: string | null;
     wetravel_status_error: string | null;
     created_at: Date;
@@ -35,6 +38,9 @@ export interface IntegrationConfigInput {
     wetravel_key_iv?: string | null;
     wetravel_key_auth_tag?: string | null;
     wetravel_key_algorithm?: string | null;
+    wetravel_access_token?: string | null;
+    wetravel_access_token_expires_at?: Date | null;
+    wetravel_token_metadata?: unknown | null;
     wetravel_status?: string | null;
     wetravel_status_error?: string | null;
     updated_at?: Date;
@@ -135,9 +141,36 @@ export function createIntegrationConfigService(store: IntegrationConfigStore) {
         },
         getWeTravelStatus: async () => {
             const config = await store.getSingleton();
+            if (!config) {
+                return { status: null, error: null };
+            }
+
+            if (config.wetravel_status) {
+                return {
+                    status: config.wetravel_status,
+                    error: config.wetravel_status_error || null
+                };
+            }
+
+            if (config.wetravel_access_token && config.wetravel_access_token_expires_at) {
+                const bufferMs = 60000;
+
+                if (config.wetravel_access_token_expires_at.getTime() <= Date.now() + bufferMs) {
+                    return {
+                        status: 'token_expiring',
+                        error: 'WeTravel bearer token is nearing expiry and will be refreshed before the next call.'
+                    };
+                }
+
+                return {
+                    status: 'connected',
+                    error: null
+                };
+            }
+
             return {
-                status: config?.wetravel_status || null,
-                error: config?.wetravel_status_error || null
+                status: null,
+                error: null
             };
         }
     };
@@ -202,9 +235,36 @@ export function createIntegrationDataService(store: IntegrationDataStore) {
         },
         getWeTravelStatus: async () => {
             const config = await store.getSingleton();
+            if (!config) {
+                return { status: null, error: null };
+            }
+
+            if (config.wetravel_status) {
+                return {
+                    status: config.wetravel_status,
+                    error: config.wetravel_status_error || null
+                };
+            }
+
+            if (config.wetravel_access_token && config.wetravel_access_token_expires_at) {
+                const bufferMs = 60000;
+
+                if (config.wetravel_access_token_expires_at.getTime() <= Date.now() + bufferMs) {
+                    return {
+                        status: 'token_expiring',
+                        error: 'WeTravel bearer token is nearing expiry and will be refreshed before the next call.'
+                    };
+                }
+
+                return {
+                    status: 'connected',
+                    error: null
+                };
+            }
+
             return {
-                status: config?.wetravel_status || null,
-                error: config?.wetravel_status_error || null
+                status: null,
+                error: null
             };
         },
         createWebhookLog: (input: WebhookLogInput) => store.createWebhookLog(input),
@@ -265,6 +325,9 @@ export function createPrismaIntegrationDataStore(prisma: PrismaLike = prismaClie
                     wetravel_key_iv: input.wetravel_key_iv ?? null,
                     wetravel_key_auth_tag: input.wetravel_key_auth_tag ?? null,
                     wetravel_key_algorithm: input.wetravel_key_algorithm ?? 'aes-256-gcm',
+                    wetravel_access_token: input.wetravel_access_token ?? null,
+                    wetravel_access_token_expires_at: input.wetravel_access_token_expires_at ?? null,
+                    wetravel_token_metadata: input.wetravel_token_metadata ?? null,
                     wetravel_status: input.wetravel_status ?? null,
                     wetravel_status_error: input.wetravel_status_error ?? null,
                     created_at: new Date(),
@@ -281,6 +344,9 @@ export function createPrismaIntegrationDataStore(prisma: PrismaLike = prismaClie
                     wetravel_key_iv: input.wetravel_key_iv ?? existingConfig?.wetravel_key_iv ?? null,
                     wetravel_key_auth_tag: input.wetravel_key_auth_tag ?? existingConfig?.wetravel_key_auth_tag ?? null,
                     wetravel_key_algorithm: input.wetravel_key_algorithm ?? existingConfig?.wetravel_key_algorithm ?? 'aes-256-gcm',
+                    wetravel_access_token: input.wetravel_access_token ?? existingConfig?.wetravel_access_token ?? null,
+                    wetravel_access_token_expires_at: input.wetravel_access_token_expires_at ?? existingConfig?.wetravel_access_token_expires_at ?? null,
+                    wetravel_token_metadata: input.wetravel_token_metadata ?? existingConfig?.wetravel_token_metadata ?? null,
                     wetravel_status: input.wetravel_status ?? existingConfig?.wetravel_status ?? null,
                     wetravel_status_error: input.wetravel_status_error ?? existingConfig?.wetravel_status_error ?? null,
                     updated_at: input.updated_at ?? new Date()

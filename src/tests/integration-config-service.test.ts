@@ -14,6 +14,16 @@ describe('integrationConfigService', () => {
             access_token: null,
             expires_at: null,
             token_metadata: null,
+            wetravel_encrypted_key: null,
+            wetravel_org_id: null,
+            wetravel_key_iv: null,
+            wetravel_key_auth_tag: null,
+            wetravel_key_algorithm: null,
+            wetravel_access_token: null,
+            wetravel_access_token_expires_at: null,
+            wetravel_token_metadata: null,
+            wetravel_status: null,
+            wetravel_status_error: null,
             created_at: new Date('2026-01-01T00:00:00.000Z'),
             updated_at: new Date('2026-01-01T00:00:00.000Z')
         });
@@ -36,6 +46,16 @@ describe('integrationConfigService', () => {
             access_token: 'access-token',
             expires_at: null,
             token_metadata: { issued_by: 'test' },
+            wetravel_encrypted_key: null,
+            wetravel_org_id: null,
+            wetravel_key_iv: null,
+            wetravel_key_auth_tag: null,
+            wetravel_key_algorithm: null,
+            wetravel_access_token: 'wetravel-access-token',
+            wetravel_access_token_expires_at: new Date('2026-01-02T01:00:00.000Z'),
+            wetravel_token_metadata: { token_type: 'Bearer' },
+            wetravel_status: 'connected',
+            wetravel_status_error: null,
             created_at: new Date('2026-01-01T00:00:00.000Z'),
             updated_at: new Date('2026-01-02T00:00:00.000Z')
         });
@@ -46,14 +66,22 @@ describe('integrationConfigService', () => {
             ventrata_webhook_secret: 'updated-secret',
             zoho_refresh_token: 'refresh-token',
             access_token: 'access-token',
-            token_metadata: { issued_by: 'test' }
+            token_metadata: { issued_by: 'test' },
+            wetravel_access_token: 'wetravel-access-token',
+            wetravel_access_token_expires_at: new Date('2026-01-02T01:00:00.000Z'),
+            wetravel_token_metadata: { token_type: 'Bearer' },
+            wetravel_status: 'connected'
         });
 
         expect(store.saveSingleton).toHaveBeenCalledWith({
             ventrata_webhook_secret: 'updated-secret',
             zoho_refresh_token: 'refresh-token',
             access_token: 'access-token',
-            token_metadata: { issued_by: 'test' }
+            token_metadata: { issued_by: 'test' },
+            wetravel_access_token: 'wetravel-access-token',
+            wetravel_access_token_expires_at: new Date('2026-01-02T01:00:00.000Z'),
+            wetravel_token_metadata: { token_type: 'Bearer' },
+            wetravel_status: 'connected'
         });
     });
 });

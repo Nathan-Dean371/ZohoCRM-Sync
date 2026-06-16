@@ -110,6 +110,9 @@ model IntegrationConfig {
   wetravel_key_iv         String?  @db.VarChar(64)
   wetravel_key_auth_tag   String?  @db.VarChar(64)
   wetravel_key_algorithm  String?  @default("aes-256-gcm") @db.VarChar(20)
+  wetravel_access_token   String?  @db.Text
+  wetravel_access_token_expires_at DateTime? @db.Timestamptz(6)
+  wetravel_token_metadata Json?    @db.JsonB
   wetravel_status         String?  @db.VarChar(20) // "connected", "invalid_key", "no_pro", "not_main_account", "permission_denied", null
   wetravel_status_error   String?  @db.Text
   created_at              DateTime @default(now()) @db.Timestamptz(6)
