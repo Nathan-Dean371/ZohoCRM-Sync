@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { processVentrataWebhook } from '../controllers/webhook-controller';
+import { processVentrataWebhook, processWeTravelWebhook } from '../controllers/webhook-controller';
 
 const router = Router();
 
 router.post('/webhook/ventrata', processVentrataWebhook);
+
+router.post('/webhook/wetravel', processWeTravelWebhook);
 
 export default router;

@@ -104,4 +104,50 @@ describe('WeTravel admin page', () => {
         expect(res.text).toContain('Test Connection');
         expect(res.text).toContain('WeTravel Pro');
     });
+
+    it('displays webhook endpoint URL when credentials are saved', async () => {
+        const admin = {
+            id: 'admin-1',
+            email: 'admin@example.com',
+            role: 'ADMIN',
+            company_id: 'company-1'
+        };
+
+        (getUserDetails as jest.Mock).mockResolvedValue(admin);
+        (require('../services/integrations/integration-config-service').integrationDataService.getWeTravelCredentials as jest.Mock)
+            .mockResolvedValue({ apiKey: 'masked', orgId: 'org_123' });
+
+        const token = jwt.sign({ user: { email: admin.email } }, JWT_SECRET);
+
+        const res = await request(app)
+            .get('/admin/dashboard/integrations/wetravel')
+            .set('Cookie', [`auth-token=${token}`]);
+
+        expect(res.status).toBe(200);
+        expect(res.text).toContain('/api/webhook/wetravel');
+        expect(res.text).toContain('Webhook Setup');
+        expect(res.text).toContain('Register');
+    });
+
+    it('shows "not configured" message when credentials are missing', async () => {
+        const admin = {
+            id: 'admin-1',
+            email: 'admin@example.com',
+            role: 'ADMIN',
+            company_id: 'company-1'
+        };
+
+        (getUserDetails as jest.Mock).mockResolvedValue(admin);
+        (require('../services/integrations/integration-config-service').integrationDataService.getWeTravelCredentials as jest.Mock)
+            .mockResolvedValue(null);
+
+        const token = jwt.sign({ user: { email: admin.email } }, JWT_SECRET);
+
+        const res = await request(app)
+            .get('/admin/dashboard/integrations/wetravel')
+            .set('Cookie', [`auth-token=${token}`]);
+
+        expect(res.status).toBe(200);
+        expect(res.text).toContain('Save credentials first');
+    });
 });

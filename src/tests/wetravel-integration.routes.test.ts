@@ -260,4 +260,64 @@ describe('WeTravel Integration Routes - Slice 3', () => {
             expect(integrationDataService.saveWeTravelCredentials).toHaveBeenCalled();
         });
     });
+
+    describe('GET /admin/integrations/wetravel/webhook', () => {
+        test('Returns webhook endpoint URL and setup info when credentials exist', async () => {
+            (integrationDataService.getWeTravelCredentials as jest.Mock).mockResolvedValue({
+                apiKey: 'masked',
+                orgId: 'org_123'
+            });
+
+            const response = await request(app)
+                .get('/admin/integrations/wetravel/webhook')
+                .expect(200);
+
+            expect(response.body).toHaveProperty('webhookUrl');
+            expect(response.body.webhookUrl).toContain('/api/webhook/wetravel');
+            expect(response.body).toHaveProperty('isConfigured');
+            expect(response.body.isConfigured).toBe(true);
+        });
+
+        test('Returns not configured status when credentials do not exist', async () => {
+            (integrationDataService.getWeTravelCredentials as jest.Mock).mockResolvedValue(null);
+
+            const response = await request(app)
+                .get('/admin/integrations/wetravel/webhook')
+                .expect(200);
+
+            expect(response.body).toHaveProperty('isConfigured');
+            expect(response.body.isConfigured).toBe(false);
+            expect(response.body).toHaveProperty('message');
+            expect(response.body.message).toContain('credentials');
+        });
+    });
+
+    describe('POST /admin/integrations/wetravel/webhook/test', () => {
+        test('Queues a test webhook event when credentials exist', async () => {
+            (integrationDataService.getWeTravelCredentials as jest.Mock).mockResolvedValue({
+                apiKey: 'masked',
+                orgId: 'org_123'
+            });
+
+            const response = await request(app)
+                .post('/admin/integrations/wetravel/webhook/test')
+                .expect(200);
+
+            expect(response.body).toHaveProperty('success');
+            expect(response.body.success).toBe(true);
+            expect(response.body).toHaveProperty('message');
+            expect(response.body.message).toContain('queued');
+        });
+
+        test('Returns error when credentials do not exist', async () => {
+            (integrationDataService.getWeTravelCredentials as jest.Mock).mockResolvedValue(null);
+
+            const response = await request(app)
+                .post('/admin/integrations/wetravel/webhook/test')
+                .expect(400);
+
+            expect(response.body).toHaveProperty('error');
+            expect(response.body.error).toContain('credentials');
+        });
+    });
 });

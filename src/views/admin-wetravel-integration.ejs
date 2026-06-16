@@ -251,6 +251,70 @@
                 </div>
             </aside>
         </div>
+
+        <% if (credentialsPresent) { %>
+        <div class="wetravel-shell" style="margin-top: 2rem;">
+            <section class="card wetravel-card">
+                <div class="wetravel-hero">
+                    <h2 style="margin: 0;">Webhook Setup</h2>
+                    <p class="subtle">
+                        Register this webhook endpoint in WeTravel/Svix to receive booking and event notifications.
+                    </p>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h3 style="margin: 0.5rem 0; color: #f7fbfb;">Endpoint URL</h3>
+                    <div style="padding: 0.9rem 1rem; border-radius: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(17, 157, 164, 0.35); font-family: monospace; word-break: break-all; color: #a7f3f5; font-size: 0.95rem;">
+                        <%= webhookUrl %>
+                    </div>
+                </div>
+
+                <div style="background: rgba(17, 157, 164, 0.14); border: 1px solid rgba(17, 157, 164, 0.35); border-radius: 12px; padding: 1rem;">
+                    <h3 style="margin: 0.5rem 0; color: #f7fbfb;">Steps to Register</h3>
+                    <ol style="margin: 0.75rem 0; padding-left: 1.25rem; color: rgba(255,255,255,0.85); line-height: 1.65;">
+                        <li style="margin-bottom: 0.65rem;">
+                            <strong>Copy the endpoint URL above.</strong> This is the unique webhook address for your WeTravel integration.
+                        </li>
+                        <li style="margin-bottom: 0.65rem;">
+                            <strong>Log in to WeTravel or Svix admin panel.</strong> Use the same account you provided credentials for above.
+                        </li>
+                        <li style="margin-bottom: 0.65rem;">
+                            <strong>Find the Webhook or Integration settings.</strong> Navigate to the integrations or webhooks section.
+                        </li>
+                        <li style="margin-bottom: 0.65rem;">
+                            <strong>Add a new webhook endpoint.</strong> Paste the URL and select the events you want to receive (e.g., booking updates, customer changes).
+                        </li>
+                        <li style="margin-bottom: 0.65rem;">
+                            <strong>Save and test.</strong> WeTravel/Svix will send a test event. Check that this app receives and logs it successfully.
+                        </li>
+                        <li>
+                            <strong>Monitor webhook logs.</strong> View received events and any failures in the <a href="/admin/dashboard/webhook-logs" style="color: #a7f3f5; text-decoration: underline;">Webhook Logs & DLQ</a> page.
+                        </li>
+                    </ol>
+                </div>
+
+                <div style="margin-top: 1rem; padding: 0.9rem 1rem; border-radius: 12px; background: rgba(76, 175, 80, 0.16); border: 1px solid rgba(76, 175, 80, 0.35); color: #d8f5db;">
+                    <strong>✓ Credentials saved.</strong> Your WeTravel credentials are stored securely. Once the webhook is registered, events will automatically flow into this app.
+                </div>
+
+                    <div class="buttonRow" style="margin-top: 1rem;">
+                        <button id="testWebhookButton" type="button" class="actionButton">Send Test Webhook</button>
+                        <a class="actionButton secondary" href="/admin/dashboard/webhook-logs" style="display:inline-flex; align-items:center; text-decoration:none;">View Webhook Logs</a>
+                    </div>
+
+                    <div id="webhookTestBox" class="responseBox">Click "Send Test Webhook" to verify your setup.</div>
+            </section>
+        </div>
+        <% } else { %>
+        <div class="wetravel-shell" style="margin-top: 2rem;">
+            <section class="card wetravel-card">
+                <div style="padding: 1rem; border-radius: 12px; background: rgba(255, 193, 7, 0.16); border: 1px solid rgba(255, 193, 7, 0.35); color: #fff2bf;">
+                    <strong>Webhook Setup</strong><br>
+                    <p class="subtle" style="margin: 0.5rem 0 0 0;">Save credentials first to configure webhooks. Once WeTravel credentials are saved and validated, webhook setup instructions and the endpoint URL will appear here.</p>
+                </div>
+            </section>
+        </div>
+        <% } %>
     </main>
 
     <script>
@@ -261,6 +325,8 @@
             const saveButton = document.getElementById('saveCredentialsButton');
             const apiKeyInput = document.getElementById('wetravelApiKey');
             const orgIdInput = document.getElementById('wetravelOrgId');
+            const testWebhookButton = document.getElementById('testWebhookButton');
+            const webhookTestBox = document.getElementById('webhookTestBox');
 
             async function postJson(url, body) {
                 const response = await fetch(url, {
@@ -338,6 +404,22 @@
                         : 'Save failed unexpectedly.';
                 }
             });
+
+                if (testWebhookButton) {
+                    testWebhookButton.addEventListener('click', async () => {
+                        webhookTestBox.textContent = 'Sending test webhook event...';
+
+                        try {
+                            const result = await postJson('/admin/integrations/wetravel/webhook/test', {});
+
+                            webhookTestBox.textContent = 'Test webhook sent successfully! Check the Webhook Logs & DLQ page to see the event.\nEvent ID: ' + result.eventId;
+                        } catch (error) {
+                            webhookTestBox.textContent = error && error.error
+                                ? error.error
+                                : 'Failed to send test webhook.';
+                        }
+                    });
+                }
         })();
     </script>
 </body>

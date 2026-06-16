@@ -337,6 +337,10 @@ app.delete('/admin/dashboard/tunnels/:id', async (req: Request, res: Response) =
             ? 'warning'
             : 'danger';
 
+        const webhookUrl = credentials 
+          ? `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/webhook/wetravel`
+          : null;
+
         res.render('admin-wetravel-integration', {
           title: 'WeTravel Integration',
           user: req.user,
@@ -345,6 +349,7 @@ app.delete('/admin/dashboard/tunnels/:id', async (req: Request, res: Response) =
           statusTone,
           credentialsPresent: !!credentials,
           orgId: credentials?.orgId ?? '',
+          webhookUrl,
           error: req.query.error,
           success: req.query.success
         });

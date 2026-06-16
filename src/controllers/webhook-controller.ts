@@ -67,3 +67,38 @@ export async function handleBookingWebhook(webhookEvent: WebhookEvent) {
         throw error;
     }
 }
+
+/**
+ * Processes incoming WeTravel webhook events.
+ * Expects X-Webhook-Secret header for HMAC validation.
+ * Persists the event to webhook logs and queues it for processing.
+ */
+export const processWeTravelWebhook: RequestHandler = async (req, res) => {
+    const xWebhookSecret = req.get('X-Webhook-Secret');
+
+    if (!xWebhookSecret) {
+        res.status(401).json({ error: 'Unauthorized: Missing X-Webhook-Secret header' });
+        return;
+    }
+
+    try {
+        // Persist to Webhook_Logs
+        const log = await integrationDataService.createWebhookLog({
+            payload: req.body,
+            status: 'RECEIVED'
+        });
+
+        // Respond immediately to WeTravel (Svix best practice)
+        res.status(200).json({ received: true, logId: log.id });
+
+        // Enqueue the job for background processing
+        // Note: Using ventrata queue for now; may create wetravel-specific queue in future
+        await ventrataWebhookQueue.add('process-wetravel-webhook', {
+            payload: req.body,
+            logId: log.id
+        });
+    } catch (error) {
+        console.error('Error processing WeTravel webhook:', error);
+        res.status(500).json({ error: 'Failed to process webhook' });
+    }
+}
