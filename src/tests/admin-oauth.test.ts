@@ -73,6 +73,18 @@ describe('Admin Zoho OAuth UI', () => {
         expect(response.text).toContain('Reconnect Zoho');
     });
 
+    it('should not expose OAuth tokens in admin integration UI', async () => {
+        (integrationDataService.hasZohoRefreshToken as jest.Mock).mockResolvedValue(true);
+
+        const response = await request(app)
+            .get('/admin/dashboard/integrations/zoho')
+            .set('Cookie', [`auth-token=${adminToken}`]);
+
+        expect(response.status).toBe(200);
+        expect(response.text).not.toContain('refresh_token');
+        expect(response.text).not.toContain('access_token');
+    });
+
     it('should redirect to Zoho OAuth URL', async () => {
         const mockAuthUrl = 'https://accounts.zoho.com/oauth/v2/auth?test=true';
         (ZohoAuthService.prototype.getAuthorizationUrl as jest.Mock).mockReturnValue(mockAuthUrl);

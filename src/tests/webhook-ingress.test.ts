@@ -48,6 +48,7 @@ describe('POST /api/webhook/ventrata', () => {
     it('should return 200, log the webhook, and enqueue job when valid', async () => {
         const payload = { event: 'booking.confirmed', data: { id: '123' } };
         (integrationDataService.getVentrataWebhookSecret as jest.Mock).mockResolvedValue(VENTRATA_SECRET);
+        (integrationDataService.createWebhookLog as jest.Mock).mockResolvedValue({ id: 'log-123' });
 
         const response = await request(app)
             .post('/api/webhook/ventrata')
@@ -64,6 +65,9 @@ describe('POST /api/webhook/ventrata', () => {
         });
 
         // Verify enqueuing
-        expect(ventrataWebhookQueue.add).toHaveBeenCalledWith('process-ventrata-webhook', payload);
+        expect(ventrataWebhookQueue.add).toHaveBeenCalledWith('process-ventrata-webhook', {
+            payload,
+            logId: 'log-123'
+        });
     });
 });

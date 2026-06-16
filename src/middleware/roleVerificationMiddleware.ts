@@ -22,6 +22,6 @@ export const verifyRole = (roles : user_role[]) => (req: Request, res: Response,
 
     }   catch (error)
     {
-        
+        next(error);
     }
 };

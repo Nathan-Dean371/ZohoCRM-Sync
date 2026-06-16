@@ -10,4 +10,13 @@ const connection = {
 
 export const ventrataWebhookQueue = new Queue('ventrata-webhook-queue', {
   connection,
+  defaultJobOptions: {
+    attempts: parseInt(process.env.QUEUE_MAX_ATTEMPTS || '5', 10),
+    backoff: {
+      type: 'exponential',
+      delay: parseInt(process.env.QUEUE_RETRY_DELAY || '1000', 10),
+    },
+    removeOnComplete: true,
+    removeOnFail: false,
+  },
 });

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WeTravel Integration</title>
+    <link rel="stylesheet" href="/css/home.css">
+    <link rel="stylesheet" href="/css/admin.css">
+    <style>
+        .wetravel-shell {
+            max-width: 980px;
+            width: calc(100% - 2rem);
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 1rem;
+        }
+
+        .wetravel-card {
+            padding: 1.5rem;
+            min-height: 100%;
+        }
+
+        .wetravel-hero {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .wetravel-badge {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            padding: 0.4rem 0.8rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.18);
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .tone-success { background: rgba(76, 175, 80, 0.16); color: #d8f5db; }
+        .tone-warning { background: rgba(255, 193, 7, 0.16); color: #fff2bf; }
+        .tone-danger { background: rgba(244, 67, 54, 0.16); color: #ffd3cf; }
+
+        .wetravel-note {
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            background: rgba(17, 157, 164, 0.14);
+            border: 1px solid rgba(17, 157, 164, 0.35);
+            color: #eefdfd;
+        }
+
+        .wetravel-grid {
+            display: grid;
+            gap: 0.85rem;
+        }
+
+        .fieldLabel {
+            display: block;
+            margin-bottom: 0.35rem;
+            color: #f7fbfb;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .fieldInput {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(255,255,255,0.08);
+            color: #ffffff;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .fieldInput::placeholder {
+            color: rgba(255,255,255,0.56);
+        }
+
+        .helperText {
+            margin-top: 0.35rem;
+            color: rgba(255,255,255,0.72);
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }
+
+        .buttonRow {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 0.25rem;
+        }
+
+        .actionButton {
+            appearance: none;
+            border: 0;
+            border-radius: 12px;
+            padding: 0.95rem 1.1rem;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            color: #041013;
+            background: linear-gradient(135deg, #e7ffff 0%, #a7f3f5 100%);
+        }
+
+        .actionButton.secondary {
+            color: #fff;
+            background: rgba(255,255,255,0.09);
+            border: 1px solid rgba(255,255,255,0.16);
+        }
+
+        .responseBox {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.18);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            min-height: 72px;
+            white-space: pre-wrap;
+        }
+
+        .checklist {
+            display: grid;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .checkItem {
+            display: grid;
+            grid-template-columns: 24px 1fr;
+            gap: 0.8rem;
+            align-items: start;
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .checkIcon {
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(17, 157, 164, 0.2);
+            color: #aef2f5;
+            font-weight: 800;
+        }
+
+        .subtle {
+            color: rgba(255,255,255,0.75);
+            line-height: 1.55;
+        }
+
+        @media (max-width: 900px) {
+            .wetravel-shell {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="">
+        <%- include('navbar'); -%>
+    </div>
+
+    <main>
+        <div class="wetravel-shell">
+            <section class="card wetravel-card">
+                <div class="wetravel-hero">
+                    <h2 style="margin: 0;">WeTravel Integration</h2>
+                    <div class="wetravel-badge tone-<%= statusTone %>" id="wetravelStatusBadge"><%= statusLabel %></div>
+                    <p class="subtle">
+                        Save WeTravel credentials, verify the Pro requirement, and test whether this account can provision integration access.
+                    </p>
+                </div>
+
+                <% if (error) { %>
+                    <div class="wetravel-note" style="margin-bottom: 1rem; border-color: rgba(244, 67, 54, 0.4); background: rgba(244, 67, 54, 0.16);">
+                        <strong>Error:</strong> <%= error %>
+                    </div>
+                <% } %>
+
+                <% if (success) { %>
+                    <div class="wetravel-note" style="margin-bottom: 1rem;">
+                        <strong>Success:</strong> WeTravel credentials are saved and validated.
+                    </div>
+                <% } %>
+
+                <div class="wetravel-grid">
+                    <div>
+                        <label class="fieldLabel" for="wetravelOrgId">Organization ID</label>
+                        <input id="wetravelOrgId" class="fieldInput" type="text" value="<%= orgId %>" placeholder="org_12345" autocomplete="off">
+                        <div class="helperText">Use the main WeTravel organization that owns the integration credentials.</div>
+                    </div>
+
+                    <div>
+                        <label class="fieldLabel" for="wetravelApiKey">API Key</label>
+                        <input id="wetravelApiKey" class="fieldInput" type="password" placeholder="Paste the WeTravel API key" autocomplete="off">
+                        <div class="helperText">The API key is encrypted at rest after you save it. The UI never re-displays the secret value.</div>
+                    </div>
+                </div>
+
+                <div class="buttonRow">
+                    <button id="testConnectionButton" type="button" class="actionButton">Test Connection</button>
+                    <button id="saveCredentialsButton" type="button" class="actionButton secondary">Save Credentials</button>
+                    <a class="actionButton secondary" href="/admin/dashboard" style="display:inline-flex; align-items:center; text-decoration:none;">Back to Dashboard</a>
+                </div>
+
+                <div id="responseBox" class="responseBox">Click Test Connection to validate the account prerequisites and API access.</div>
+            </section>
+
+            <aside class="card wetravel-card">
+                <div class="wetravel-hero">
+                    <h2 style="margin: 0;">Setup Checklist</h2>
+                    <p class="subtle">The validation flow is intentionally fail-fast so admins see the real blocker first.</p>
+                </div>
+
+                <div class="checklist">
+                    <div class="checkItem">
+                        <div class="checkIcon">1</div>
+                        <div>
+                            <strong>WeTravel Pro</strong>
+                            <div class="helperText">The account must be on a WeTravel Pro plan before integration setup can succeed.</div>
+                        </div>
+                    </div>
+                    <div class="checkItem">
+                        <div class="checkIcon">2</div>
+                        <div>
+                            <strong>Main account</strong>
+                            <div class="helperText">Use the primary account that is allowed to provision integration credentials, not a sub-account.</div>
+                        </div>
+                    </div>
+                    <div class="checkItem">
+                        <div class="checkIcon">3</div>
+                        <div>
+                            <strong>Integration permissions</strong>
+                            <div class="helperText">The API key needs permission to read account status and manage integrations.</div>
+                        </div>
+                    </div>
+                    <div class="checkItem">
+                        <div class="checkIcon"><%= credentialsPresent ? '✓' : '4' %></div>
+                        <div>
+                            <strong>Saved setup state</strong>
+                            <div class="helperText">Current status: <%= status.status || 'not connected' %>. <%= credentialsPresent ? 'Credentials are already stored.' : 'No credentials saved yet.' %></div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </main>
+
+    <script>
+        (function () {
+            const statusBadge = document.getElementById('wetravelStatusBadge');
+            const responseBox = document.getElementById('responseBox');
+            const testButton = document.getElementById('testConnectionButton');
+            const saveButton = document.getElementById('saveCredentialsButton');
+            const apiKeyInput = document.getElementById('wetravelApiKey');
+            const orgIdInput = document.getElementById('wetravelOrgId');
+
+            async function postJson(url, body) {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw payload;
+                }
+
+                return payload;
+            }
+
+            function updateStatus(result) {
+                const status = result.status || 'not connected';
+                const tone = status === 'connected'
+                    ? 'tone-success'
+                    : ['no_pro', 'not_main_account', 'permission_denied'].includes(status)
+                        ? 'tone-warning'
+                        : 'tone-danger';
+
+                statusBadge.className = 'wetravel-badge ' + tone;
+                statusBadge.textContent = status === 'connected'
+                    ? 'Connected'
+                    : status === 'no_pro'
+                        ? 'WeTravel Pro required'
+                        : status === 'not_main_account'
+                            ? 'Main account required'
+                            : status === 'permission_denied'
+                                ? 'Permission denied'
+                                : status === 'invalid_key'
+                                    ? 'Needs attention'
+                                    : 'Not connected';
+            }
+
+            testButton.addEventListener('click', async () => {
+                responseBox.textContent = 'Validating WeTravel credentials...';
+
+                try {
+                    const result = await postJson('/admin/integrations/wetravel/validate', {
+                        apiKey: apiKeyInput.value,
+                        orgId: orgIdInput.value
+                    });
+
+                    updateStatus(result);
+                    responseBox.textContent = result.isValid
+                        ? 'Validation succeeded. This account can connect to WeTravel.'
+                        : (result.errorMessage || 'Validation failed.');
+                } catch (error) {
+                    responseBox.textContent = error && error.error
+                        ? error.error
+                        : 'Validation failed unexpectedly.';
+                }
+            });
+
+            saveButton.addEventListener('click', async () => {
+                responseBox.textContent = 'Saving WeTravel credentials...';
+
+                try {
+                    const result = await postJson('/admin/integrations/wetravel/save', {
+                        apiKey: apiKeyInput.value,
+                        orgId: orgIdInput.value
+                    });
+
+                    updateStatus({ status: result.status });
+                    responseBox.textContent = result.message || 'Credentials saved.';
+                } catch (error) {
+                    responseBox.textContent = error && error.error
+                        ? error.error
+                        : 'Save failed unexpectedly.';
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

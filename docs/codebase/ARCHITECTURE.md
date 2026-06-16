@@ -2,6 +2,8 @@
 
 Overview (evidence-backed):
 
+The runtime integration scope is documented in [docs/adr/README.md](../adr/README.md) and [ADR 0002](../adr/0002-multisource-runtime-scope.md): the shared pipeline accepts Ventrata and WeTravel as sources and writes to Zoho as the destination.
+
 - The application is an Express-based server that handles HTTP requests and renders EJS views.
 - Typical request flow: HTTP request → route (`src/routes/*`) → controller (`src/controllers/*`) → service (`src/services/*`) → persistence via Prisma (`prisma/schema.prisma`).
 - Prisma is the primary data access layer targeting PostgreSQL; migrations live under `prisma/migrations/`.

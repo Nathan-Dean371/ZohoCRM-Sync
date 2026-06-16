@@ -23,6 +23,7 @@ import { User } from './types/users';
 import { create } from 'domain';
 import managerRoutes from './routes/manager.routes';
 import managerTunnelsRouter from './routes/managerTunnels.routes';
+import wetravelIntegrationRoutes from './routes/wetravel-integration.routes';
 import ZohoAuthService from './services/zoho/zoho-auth';
 import { integrationDataService } from './services/integrations/integration-config-service';
 
@@ -68,6 +69,7 @@ connectToDatabase();
 // Mount the API key check route
 app.use('/api/', apiKeyRoute)
 app.use('/api', webhookRoutes);
+app.use('/', wetravelIntegrationRoutes);
 app.post('/api/:id/webhook', (req: Request, res: Response) =>
 {
   console.log("Received webhook");
@@ -312,6 +314,46 @@ app.delete('/admin/dashboard/tunnels/:id', async (req: Request, res: Response) =
     }
   });
 
+      app.get('/admin/dashboard/integrations/wetravel', async (req: Request, res: Response) => {
+      try {
+        const status = await integrationDataService.getWeTravelStatus();
+        const credentials = await integrationDataService.getWeTravelCredentials();
+
+        const statusLabel = status.status === 'connected'
+          ? 'Connected'
+          : status.status === 'invalid_key'
+            ? 'Needs attention'
+            : status.status === 'no_pro'
+              ? 'WeTravel Pro required'
+              : status.status === 'not_main_account'
+                ? 'Main account required'
+                : status.status === 'permission_denied'
+                  ? 'Permission denied'
+                  : 'Not connected';
+
+        const statusTone = status.status === 'connected'
+          ? 'success'
+          : status.status
+            ? 'warning'
+            : 'danger';
+
+        res.render('admin-wetravel-integration', {
+          title: 'WeTravel Integration',
+          user: req.user,
+          status,
+          statusLabel,
+          statusTone,
+          credentialsPresent: !!credentials,
+          orgId: credentials?.orgId ?? '',
+          error: req.query.error,
+          success: req.query.success
+        });
+      } catch (error) {
+        console.error('Error loading WeTravel integration status:', error);
+        res.status(500).render('error', { title: 'Error', message: 'Error loading WeTravel integration status', user: req.user });
+      }
+      });
+
   app.get('/admin/dashboard/integrations/zoho/auth', (req: Request, res: Response) => {
     const zohoAuth = new ZohoAuthService();
     res.redirect(zohoAuth.getAuthorizationUrl());
@@ -347,6 +389,59 @@ app.delete('/admin/dashboard/tunnels/:id', async (req: Request, res: Response) =
     } catch (err) {
         console.error('Error during Zoho OAuth callback:', err);
         res.redirect(`/admin/dashboard/integrations/zoho?error=${encodeURIComponent((err as Error).message)}`);
+    }
+  });
+
+  app.get('/admin/dashboard/webhook-logs', async (req: Request, res: Response) => {
+    try {
+        const { status } = req.query;
+        const where = status ? { status: status as string } : {};
+        
+        const logs = await integrationDataService.listWebhookLogs({
+            where,
+            orderBy: { created_at: 'desc' },
+            take: 100 // Limit for now
+        });
+
+        res.render('admin-webhook-logs', { 
+            title: 'Webhook Logs & DLQ', 
+            user: req.user, 
+            logs,
+            statusFilter: status || ''
+        });
+    } catch (error) {
+        console.error('Error fetching webhook logs:', error);
+        res.status(500).render('error', { title: 'Error', message: 'Error loading webhook logs', user: req.user });
+    }
+  });
+
+  app.post('/admin/dashboard/webhook-logs/:id/requeue', async (req: Request, res: Response) => {
+    try {
+        const log = await integrationDataService.getWebhookLog(req.params.id);
+        if (!log) {
+            res.status(404).json({ success: false, message: 'Log not found' });
+            return;
+        }
+
+        // Reset log status and attempts
+        await integrationDataService.updateWebhookLog(log.id, {
+            status: 'RECEIVED',
+            attempts: 0,
+            last_error: null,
+            dlq_ref: null
+        });
+
+        // Enqueue the job again
+        const { ventrataWebhookQueue } = await import('./services/queue');
+        await ventrataWebhookQueue.add('process-ventrata-webhook', {
+            payload: log.payload,
+            logId: log.id
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error requeueing job:', error);
+        res.status(500).json({ success: false, message: 'Error requeueing job' });
     }
   });
   //#endregion

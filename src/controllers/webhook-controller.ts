@@ -16,7 +16,7 @@ export const processVentrataWebhook: RequestHandler = async (req, res) => {
     }
 
     // Persist to Webhook_Logs
-    await integrationDataService.createWebhookLog({
+    const log = await integrationDataService.createWebhookLog({
         payload: req.body,
         status: 'RECEIVED'
     });
@@ -25,7 +25,10 @@ export const processVentrataWebhook: RequestHandler = async (req, res) => {
     res.status(200).send('Webhook received and acknowledged');
 
     // Enqueue the job for background processing
-    await ventrataWebhookQueue.add('process-ventrata-webhook', req.body);
+    await ventrataWebhookQueue.add('process-ventrata-webhook', {
+        payload: req.body,
+        logId: log.id
+    });
 };
 
 export async function handleBookingWebhook(webhookEvent: WebhookEvent) {
