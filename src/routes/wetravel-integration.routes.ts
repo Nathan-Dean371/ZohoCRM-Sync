@@ -7,7 +7,7 @@ const router: Router = express.Router();
 
 interface WeTravelCredentialRequest {
     apiKey: string;
-    orgId: string;
+    orgId?: string;
 }
 
 /**
@@ -18,12 +18,14 @@ router.get('/admin/integrations/wetravel', async (req: Request, res: Response) =
     try {
         const status = await integrationDataService.getWeTravelStatus();
         const credentials = await integrationDataService.getWeTravelCredentials();
+        const rolloutGuard = await integrationDataService.getWeTravelRolloutGuard();
 
         res.json({
             connected: status.status === 'connected',
             status: status.status,
             error: status.error,
-            hasCredentials: !!credentials
+            hasCredentials: !!credentials,
+            rolloutGuard
         });
     } catch (error) {
         console.error('Failed to get WeTravel status:', error);
@@ -37,8 +39,7 @@ router.get('/admin/integrations/wetravel', async (req: Request, res: Response) =
  * 
  * Request body:
  * {
- *   "apiKey": "wetravel_api_key",
- *   "orgId": "org_12345"
+ *   "apiKey": "wetravel_api_key"
  * }
  * 
  * Response:
@@ -56,12 +57,8 @@ router.post('/admin/integrations/wetravel/validate', async (req: Request, res: R
             throw new AppError(400, 'API key is required');
         }
 
-        if (!orgId || typeof orgId !== 'string' || orgId.trim().length === 0) {
-            throw new AppError(400, 'Organization ID is required');
-        }
-
         const validator = new WeTravelValidator();
-        const validationResult = await validator.validateCredentials(apiKey.trim(), orgId.trim());
+        const validationResult = await validator.validateCredentials(apiKey.trim(), orgId?.trim() || undefined);
 
         res.json(validationResult);
     } catch (error) {
@@ -80,8 +77,7 @@ router.post('/admin/integrations/wetravel/validate', async (req: Request, res: R
  * 
  * Request body:
  * {
- *   "apiKey": "wetravel_api_key",
- *   "orgId": "org_12345"
+ *   "apiKey": "wetravel_api_key"
  * }
  * 
  * Response:
@@ -99,13 +95,10 @@ router.post('/admin/integrations/wetravel/save', async (req: Request, res: Respo
             throw new AppError(400, 'API key is required');
         }
 
-        if (!orgId || typeof orgId !== 'string' || orgId.trim().length === 0) {
-            throw new AppError(400, 'Organization ID is required');
-        }
-
         // Validate before saving
         const validator = new WeTravelValidator();
-        const validationResult = await validator.validateCredentials(apiKey.trim(), orgId.trim());
+        const normalizedOrgId = orgId?.trim();
+        const validationResult = await validator.validateCredentials(apiKey.trim(), normalizedOrgId || undefined);
 
         if (!validationResult.isValid) {
             // Don't save invalid credentials, return validation error
@@ -121,7 +114,7 @@ router.post('/admin/integrations/wetravel/save', async (req: Request, res: Respo
         await integrationDataService.saveWeTravelCredentials(
             {
                 apiKey: apiKey.trim(),
-                orgId: orgId.trim()
+                orgId: normalizedOrgId || undefined
             },
             'connected'
         );
@@ -147,11 +140,15 @@ router.post('/admin/integrations/wetravel/save', async (req: Request, res: Respo
  */
 router.delete('/admin/integrations/wetravel', async (req: Request, res: Response) => {
     try {
-        await integrationDataService.saveWeTravelCredentials(
-            { apiKey: '', orgId: '' },
-            'disconnected',
-            'Credentials removed'
-        );
+        await integrationDataService.saveIntegrationConfig({
+            wetravel_encrypted_key: null,
+            wetravel_org_id: null,
+            wetravel_key_iv: null,
+            wetravel_key_auth_tag: null,
+            wetravel_key_algorithm: null,
+            wetravel_status: 'disconnected',
+            wetravel_status_error: 'Credentials removed'
+        });
 
         res.json({
             success: true,
@@ -160,6 +157,41 @@ router.delete('/admin/integrations/wetravel', async (req: Request, res: Response
     } catch (error) {
         console.error('Disconnect error:', error);
         throw new AppError(500, 'Failed to disconnect WeTravel integration');
+    }
+});
+
+/**
+ * POST /admin/integrations/wetravel/rollout
+ * Enables or disables WeTravel sync processing without affecting ingress logging.
+ */
+router.post('/admin/integrations/wetravel/rollout', async (req: Request, res: Response) => {
+    try {
+        const enabled = req.body?.enabled;
+
+        if (typeof enabled !== 'boolean') {
+            throw new AppError(400, 'enabled must be a boolean');
+        }
+
+        await integrationDataService.saveIntegrationConfig({
+            wetravel_rollout_state: enabled ? 'enabled' : 'disabled'
+        });
+
+        res.json({
+            success: true,
+            rolloutGuard: {
+                state: enabled ? 'enabled' : 'disabled',
+                enabled,
+                canProcess: enabled,
+                source: 'manual'
+            }
+        });
+    } catch (error) {
+        if (error instanceof AppError) {
+            res.status(error.statusCode).json({ success: false, error: error.message });
+        } else {
+            console.error('Rollout guard update error:', error);
+            throw new AppError(500, 'Failed to update WeTravel rollout guard');
+        }
     }
 });
 

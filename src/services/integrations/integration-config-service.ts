@@ -3,7 +3,16 @@ import { encryptCredential, decryptCredential, type EncryptedCredential } from '
 
 export interface WeTravelCredentials {
     apiKey: string; // plaintext input before encryption
-    orgId: string;
+    orgId?: string | null;
+}
+
+export type WeTravelRolloutState = 'enabled' | 'disabled';
+
+export interface WeTravelRolloutGuard {
+    state: WeTravelRolloutState;
+    enabled: boolean;
+    canProcess: boolean;
+    source: 'default' | 'configured' | 'manual';
 }
 
 export interface IntegrationConfigRecord {
@@ -21,6 +30,7 @@ export interface IntegrationConfigRecord {
     wetravel_access_token: string | null;
     wetravel_access_token_expires_at: Date | null;
     wetravel_token_metadata: unknown | null;
+    wetravel_rollout_state: string | null;
     wetravel_status: string | null;
     wetravel_status_error: string | null;
     created_at: Date;
@@ -41,6 +51,7 @@ export interface IntegrationConfigInput {
     wetravel_access_token?: string | null;
     wetravel_access_token_expires_at?: Date | null;
     wetravel_token_metadata?: unknown | null;
+    wetravel_rollout_state?: string | null;
     wetravel_status?: string | null;
     wetravel_status_error?: string | null;
     updated_at?: Date;
@@ -52,6 +63,8 @@ export interface WebhookLogInput {
     attempts?: number;
     last_error?: string | null;
     dlq_ref?: string | null;
+    failure_class?: string | null;
+    failure_diagnostics?: unknown | null;
     processed_at?: Date | null;
 }
 
@@ -62,6 +75,8 @@ export interface WebhookLogRecord extends WebhookLogInput {
     processed_at: Date | null;
     last_error: string | null;
     dlq_ref: string | null;
+    failure_class: string | null;
+    failure_diagnostics: unknown | null;
 }
 
 export interface IdempotencyMapInput {
@@ -102,7 +117,7 @@ export function createIntegrationConfigService(store: IntegrationConfigStore) {
         // WeTravel credential methods
         getWeTravelCredentials: async (): Promise<WeTravelCredentials | null> => {
             const config = await store.getSingleton();
-            if (!config?.wetravel_encrypted_key || !config?.wetravel_org_id) {
+            if (!config?.wetravel_encrypted_key) {
                 return null;
             }
 
@@ -119,7 +134,7 @@ export function createIntegrationConfigService(store: IntegrationConfigStore) {
 
                 return {
                     apiKey: decrypted,
-                    orgId: config.wetravel_org_id
+                    orgId: config.wetravel_org_id ?? undefined
                 };
             } catch (error) {
                 console.error('Failed to decrypt WeTravel credentials:', error);
@@ -131,7 +146,7 @@ export function createIntegrationConfigService(store: IntegrationConfigStore) {
 
             return store.saveSingleton({
                 wetravel_encrypted_key: encrypted.encryptedValue,
-                wetravel_org_id: credentials.orgId,
+                wetravel_org_id: credentials.orgId ?? null,
                 wetravel_key_iv: encrypted.iv,
                 wetravel_key_auth_tag: encrypted.authTag,
                 wetravel_key_algorithm: encrypted.algorithm,
@@ -172,6 +187,18 @@ export function createIntegrationConfigService(store: IntegrationConfigStore) {
                 status: null,
                 error: null
             };
+        },
+        getWeTravelRolloutGuard: async (): Promise<WeTravelRolloutGuard> => {
+            const config = await store.getSingleton();
+            const configuredState = config?.wetravel_rollout_state === 'disabled' ? 'disabled' : 'enabled';
+            const source = config?.wetravel_rollout_state ? 'configured' : 'default';
+
+            return {
+                state: configuredState,
+                enabled: configuredState === 'enabled',
+                canProcess: configuredState === 'enabled',
+                source
+            };
         }
     };
 }
@@ -196,7 +223,7 @@ export function createIntegrationDataService(store: IntegrationDataStore) {
         // WeTravel credential methods
         getWeTravelCredentials: async (): Promise<WeTravelCredentials | null> => {
             const config = await store.getSingleton();
-            if (!config?.wetravel_encrypted_key || !config?.wetravel_org_id) {
+            if (!config?.wetravel_encrypted_key) {
                 return null;
             }
 
@@ -213,7 +240,7 @@ export function createIntegrationDataService(store: IntegrationDataStore) {
 
                 return {
                     apiKey: decrypted,
-                    orgId: config.wetravel_org_id
+                    orgId: config.wetravel_org_id ?? undefined
                 };
             } catch (error) {
                 console.error('Failed to decrypt WeTravel credentials:', error);
@@ -225,7 +252,7 @@ export function createIntegrationDataService(store: IntegrationDataStore) {
 
             return store.saveSingleton({
                 wetravel_encrypted_key: encrypted.encryptedValue,
-                wetravel_org_id: credentials.orgId,
+                wetravel_org_id: credentials.orgId ?? null,
                 wetravel_key_iv: encrypted.iv,
                 wetravel_key_auth_tag: encrypted.authTag,
                 wetravel_key_algorithm: encrypted.algorithm,
@@ -265,6 +292,18 @@ export function createIntegrationDataService(store: IntegrationDataStore) {
             return {
                 status: null,
                 error: null
+            };
+        },
+        getWeTravelRolloutGuard: async (): Promise<WeTravelRolloutGuard> => {
+            const config = await store.getSingleton();
+            const configuredState = config?.wetravel_rollout_state === 'disabled' ? 'disabled' : 'enabled';
+            const source = config?.wetravel_rollout_state ? 'configured' : 'default';
+
+            return {
+                state: configuredState,
+                enabled: configuredState === 'enabled',
+                canProcess: configuredState === 'enabled',
+                source
             };
         },
         createWebhookLog: (input: WebhookLogInput) => store.createWebhookLog(input),
@@ -328,6 +367,7 @@ export function createPrismaIntegrationDataStore(prisma: PrismaLike = prismaClie
                     wetravel_access_token: input.wetravel_access_token ?? null,
                     wetravel_access_token_expires_at: input.wetravel_access_token_expires_at ?? null,
                     wetravel_token_metadata: input.wetravel_token_metadata ?? null,
+                    wetravel_rollout_state: input.wetravel_rollout_state ?? null,
                     wetravel_status: input.wetravel_status ?? null,
                     wetravel_status_error: input.wetravel_status_error ?? null,
                     created_at: new Date(),
@@ -347,6 +387,7 @@ export function createPrismaIntegrationDataStore(prisma: PrismaLike = prismaClie
                     wetravel_access_token: input.wetravel_access_token ?? existingConfig?.wetravel_access_token ?? null,
                     wetravel_access_token_expires_at: input.wetravel_access_token_expires_at ?? existingConfig?.wetravel_access_token_expires_at ?? null,
                     wetravel_token_metadata: input.wetravel_token_metadata ?? existingConfig?.wetravel_token_metadata ?? null,
+                    wetravel_rollout_state: input.wetravel_rollout_state ?? existingConfig?.wetravel_rollout_state ?? null,
                     wetravel_status: input.wetravel_status ?? existingConfig?.wetravel_status ?? null,
                     wetravel_status_error: input.wetravel_status_error ?? existingConfig?.wetravel_status_error ?? null,
                     updated_at: input.updated_at ?? new Date()
@@ -361,6 +402,8 @@ export function createPrismaIntegrationDataStore(prisma: PrismaLike = prismaClie
                     attempts: input.attempts ?? 0,
                     last_error: input.last_error ?? null,
                     dlq_ref: input.dlq_ref ?? null,
+                    failure_class: input.failure_class ?? null,
+                    failure_diagnostics: input.failure_diagnostics ?? null,
                     processed_at: input.processed_at ?? null
                 }
             });
@@ -374,6 +417,8 @@ export function createPrismaIntegrationDataStore(prisma: PrismaLike = prismaClie
                     attempts: input.attempts,
                     last_error: input.last_error ?? null,
                     dlq_ref: input.dlq_ref ?? null,
+                    failure_class: input.failure_class ?? null,
+                    failure_diagnostics: input.failure_diagnostics ?? null,
                     processed_at: input.processed_at ?? null
                 }
             });

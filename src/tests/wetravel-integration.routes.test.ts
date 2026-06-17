@@ -4,8 +4,24 @@ import weTravelRoutes from '../routes/wetravel-integration.routes';
 import { integrationDataService } from '../services/integrations/integration-config-service';
 import { WeTravelValidator } from '../services/integrations/wetravel-validator';
 
-// Mock dependencies
-jest.mock('../services/integrations/integration-config-service');
+jest.mock('../services/integrations/integration-config-service', () => ({
+    integrationDataService: {
+        hasZohoRefreshToken: jest.fn().mockResolvedValue(false),
+        saveIntegrationConfig: jest.fn(),
+        saveWeTravelCredentials: jest.fn(),
+        createWebhookLog: jest.fn().mockResolvedValue(null),
+        listWebhookLogs: jest.fn().mockResolvedValue([]),
+        getWeTravelStatus: jest.fn().mockResolvedValue({ status: null, error: null }),
+        getWeTravelCredentials: jest.fn().mockResolvedValue(null),
+        getWeTravelRolloutGuard: jest.fn().mockResolvedValue({
+            state: 'enabled',
+            enabled: true,
+            canProcess: true,
+            source: 'default'
+        })
+    }
+}));
+
 jest.mock('../services/integrations/wetravel-validator');
 
 describe('WeTravel Integration Routes - Slice 3', () => {
@@ -26,8 +42,7 @@ describe('WeTravel Integration Routes - Slice 3', () => {
                 error: null
             });
             (integrationDataService.getWeTravelCredentials as jest.Mock).mockResolvedValue({
-                apiKey: 'masked',
-                orgId: 'org_123'
+                apiKey: 'masked'
             });
 
             const response = await request(app)
@@ -38,7 +53,33 @@ describe('WeTravel Integration Routes - Slice 3', () => {
                 connected: true,
                 status: 'connected',
                 error: null,
-                hasCredentials: true
+                hasCredentials: true,
+                rolloutGuard: {
+                    state: 'enabled',
+                    enabled: true,
+                    canProcess: true,
+                    source: 'default'
+                }
+            });
+        });
+
+        test('Returns rollout guard state for operators', async () => {
+            (integrationDataService.getWeTravelRolloutGuard as jest.Mock).mockResolvedValue({
+                state: 'disabled',
+                enabled: false,
+                canProcess: false,
+                source: 'manual'
+            });
+
+            const response = await request(app)
+                .get('/admin/integrations/wetravel')
+                .expect(200);
+
+            expect(response.body.rolloutGuard).toEqual({
+                state: 'disabled',
+                enabled: false,
+                canProcess: false,
+                source: 'manual'
             });
         });
 
@@ -63,8 +104,7 @@ describe('WeTravel Integration Routes - Slice 3', () => {
                 error: 'API key is invalid or expired'
             });
             (integrationDataService.getWeTravelCredentials as jest.Mock).mockResolvedValue({
-                apiKey: 'masked',
-                orgId: 'org_123'
+                apiKey: 'masked'
             });
 
             const response = await request(app)
@@ -91,8 +131,7 @@ describe('WeTravel Integration Routes - Slice 3', () => {
             const response = await request(app)
                 .post('/admin/integrations/wetravel/validate')
                 .send({
-                    apiKey: 'test_key_123456',
-                    orgId: 'org_123'
+                    apiKey: 'test_key_123456'
                 })
                 .expect(200);
 
@@ -101,7 +140,6 @@ describe('WeTravel Integration Routes - Slice 3', () => {
                 status: 'connected'
             });
 
-            // Verify credentials were NOT saved
             expect(integrationDataService.saveWeTravelCredentials).not.toHaveBeenCalled();
         });
 
@@ -119,8 +157,7 @@ describe('WeTravel Integration Routes - Slice 3', () => {
             const response = await request(app)
                 .post('/admin/integrations/wetravel/validate')
                 .send({
-                    apiKey: 'invalid_key',
-                    orgId: 'org_123'
+                    apiKey: 'invalid_key'
                 })
                 .expect(200);
 
@@ -131,23 +168,10 @@ describe('WeTravel Integration Routes - Slice 3', () => {
         test('Rejects missing API key', async () => {
             const response = await request(app)
                 .post('/admin/integrations/wetravel/validate')
-                .send({
-                    orgId: 'org_123'
-                })
+                .send({})
                 .expect(400);
 
             expect(response.body.error).toContain('API key is required');
-        });
-
-        test('Rejects missing organization ID', async () => {
-            const response = await request(app)
-                .post('/admin/integrations/wetravel/validate')
-                .send({
-                    apiKey: 'test_key_123456'
-                })
-                .expect(400);
-
-            expect(response.body.error).toContain('Organization ID is required');
         });
     });
 
@@ -169,8 +193,7 @@ describe('WeTravel Integration Routes - Slice 3', () => {
             const response = await request(app)
                 .post('/admin/integrations/wetravel/save')
                 .send({
-                    apiKey: 'valid_key_123456',
-                    orgId: 'org_123'
+                    apiKey: 'valid_key_123456'
                 })
                 .expect(200);
 
@@ -181,7 +204,7 @@ describe('WeTravel Integration Routes - Slice 3', () => {
             });
 
             expect(integrationDataService.saveWeTravelCredentials).toHaveBeenCalledWith(
-                { apiKey: 'valid_key_123456', orgId: 'org_123' },
+                { apiKey: 'valid_key_123456', orgId: undefined },
                 'connected'
             );
         });
@@ -200,8 +223,7 @@ describe('WeTravel Integration Routes - Slice 3', () => {
             const response = await request(app)
                 .post('/admin/integrations/wetravel/save')
                 .send({
-                    apiKey: 'test_key_123456',
-                    orgId: 'org_123'
+                    apiKey: 'test_key_123456'
                 })
                 .expect(400);
 
@@ -209,7 +231,6 @@ describe('WeTravel Integration Routes - Slice 3', () => {
             expect(response.body.status).toBe('no_pro');
             expect(response.body.error).toContain('does not have Pro plan');
 
-            // Verify credentials were NOT saved
             expect(integrationDataService.saveWeTravelCredentials).not.toHaveBeenCalled();
         });
 
@@ -230,21 +251,20 @@ describe('WeTravel Integration Routes - Slice 3', () => {
             await request(app)
                 .post('/admin/integrations/wetravel/save')
                 .send({
-                    apiKey: '  valid_key_123456  ',
-                    orgId: '  org_123  '
+                    apiKey: '  valid_key_123456  '
                 })
                 .expect(200);
 
             expect(mockValidatorInstance.validateCredentials).toHaveBeenCalledWith(
                 'valid_key_123456',
-                'org_123'
+                undefined
             );
         });
     });
 
     describe('DELETE /admin/integrations/wetravel', () => {
         test('Disconnects WeTravel integration', async () => {
-            (integrationDataService.saveWeTravelCredentials as jest.Mock).mockResolvedValue({
+            (integrationDataService.saveIntegrationConfig as jest.Mock).mockResolvedValue({
                 wetravel_status: null
             });
 
@@ -257,15 +277,42 @@ describe('WeTravel Integration Routes - Slice 3', () => {
                 message: expect.stringContaining('disconnected')
             });
 
-            expect(integrationDataService.saveWeTravelCredentials).toHaveBeenCalled();
+            expect(integrationDataService.saveIntegrationConfig).toHaveBeenCalledWith({
+                wetravel_encrypted_key: null,
+                wetravel_org_id: null,
+                wetravel_key_iv: null,
+                wetravel_key_auth_tag: null,
+                wetravel_key_algorithm: null,
+                wetravel_status: 'disconnected',
+                wetravel_status_error: 'Credentials removed'
+            });
+        });
+    });
+
+    describe('POST /admin/integrations/wetravel/rollout', () => {
+        test('Disables WeTravel processing through the rollout guard', async () => {
+            const response = await request(app)
+                .post('/admin/integrations/wetravel/rollout')
+                .send({ enabled: false })
+                .expect(200);
+
+            expect(response.body.rolloutGuard).toEqual({
+                state: 'disabled',
+                enabled: false,
+                canProcess: false,
+                source: 'manual'
+            });
+
+            expect(integrationDataService.saveIntegrationConfig).toHaveBeenCalledWith({
+                wetravel_rollout_state: 'disabled'
+            });
         });
     });
 
     describe('GET /admin/integrations/wetravel/webhook', () => {
         test('Returns webhook endpoint URL and setup info when credentials exist', async () => {
             (integrationDataService.getWeTravelCredentials as jest.Mock).mockResolvedValue({
-                apiKey: 'masked',
-                orgId: 'org_123'
+                apiKey: 'masked'
             });
 
             const response = await request(app)
@@ -295,8 +342,7 @@ describe('WeTravel Integration Routes - Slice 3', () => {
     describe('POST /admin/integrations/wetravel/webhook/test', () => {
         test('Queues a test webhook event when credentials exist', async () => {
             (integrationDataService.getWeTravelCredentials as jest.Mock).mockResolvedValue({
-                apiKey: 'masked',
-                orgId: 'org_123'
+                apiKey: 'masked'
             });
 
             const response = await request(app)

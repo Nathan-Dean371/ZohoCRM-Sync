@@ -30,6 +30,8 @@
         
         .error-text { color: #dc3545; font-size: 0.9em; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
         .error-text:hover { white-space: normal; }
+        .diagnostics-text { color: #495057; font-size: 0.85em; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+        .diagnostics-text:hover { white-space: normal; }
     </style>
 </head>
 <body>
@@ -60,13 +62,15 @@
                         <th>Processed At</th>
                         <th>Status</th>
                         <th>Attempts</th>
+                        <th>Failure Class</th>
                         <th>Last Error</th>
+                        <th>Diagnostics</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <% if (logs.length === 0) { %>
-                        <tr><td colspan="6">No logs found.</td></tr>
+                        <tr><td colspan="7">No logs found.</td></tr>
                     <% } %>
                     <% logs.forEach(log => { %>
                         <tr>
@@ -78,8 +82,12 @@
                                 </span>
                             </td>
                             <td><%= log.attempts %></td>
+                            <td><%= log.failure_class || '-' %></td>
                             <td class="error-text" title="<%= log.last_error %>">
                                 <%= log.last_error || '-' %>
+                            </td>
+                            <td class="diagnostics-text" title="<%= JSON.stringify(log.failure_diagnostics || {}) %>">
+                                <%= log.failure_diagnostics ? JSON.stringify(log.failure_diagnostics) : '-' %>
                             </td>
                             <td>
                                 <button class="requeue-btn" onclick="replayJob('<%= log.id %>', '<%= log.status %>')">Replay</button>

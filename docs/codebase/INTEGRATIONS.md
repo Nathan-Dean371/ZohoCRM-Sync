@@ -4,6 +4,8 @@ External systems integrated (verified by service code and dependencies):
 
 Runtime source integrations are scoped by the ADR index in [docs/adr/README.md](../adr/README.md). The current runtime scope is Ventrata and WeTravel as sources, with Zoho as the destination CRM.
 
+WeTravel uses the v2 API contract by default. Admin setup and token exchange should target the v2 root unless a specific override is supplied.
+
 - CRM providers implemented under `src/services/`:
 	- Zoho (`src/services/zoho/`)
 	- Freshsales (`src/services/Freshsales/`)

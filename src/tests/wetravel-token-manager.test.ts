@@ -26,8 +26,7 @@ describe('WeTravelTokenManager', () => {
         const now = Date.now();
 
         mockIntegrationDataService.getWeTravelCredentials.mockResolvedValue({
-            apiKey: 'seed-token-123',
-            orgId: 'org-abc'
+            apiKey: 'seed-token-123'
         });
 
         mockIntegrationDataService.getIntegrationConfig.mockResolvedValue({
@@ -48,7 +47,7 @@ describe('WeTravelTokenManager', () => {
         const token = await tokenManager.getAccessToken();
 
         expect(token).toBe('fresh-bearer-token');
-        expect(mockAuthService.exchangeBearerToken).toHaveBeenCalledWith('seed-token-123', 'org-abc');
+        expect(mockAuthService.exchangeBearerToken).toHaveBeenCalledWith('seed-token-123');
         expect(mockIntegrationDataService.saveIntegrationConfig).toHaveBeenCalledWith(expect.objectContaining({
             wetravel_access_token: 'fresh-bearer-token',
             wetravel_access_token_expires_at: expect.any(Date),
@@ -65,8 +64,7 @@ describe('WeTravelTokenManager', () => {
         const now = Date.now();
 
         mockIntegrationDataService.getWeTravelCredentials.mockResolvedValue({
-            apiKey: 'seed-token-123',
-            orgId: 'org-abc'
+            apiKey: 'seed-token-123'
         });
 
         mockIntegrationDataService.getIntegrationConfig.mockResolvedValue({

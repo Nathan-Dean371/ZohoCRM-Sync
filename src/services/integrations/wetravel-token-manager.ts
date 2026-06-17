@@ -29,26 +29,7 @@ export class WeTravelTokenManager {
             return this.refreshPromise;
         }
 
-        const [config, credentials] = await Promise.all([
-            this.integrationDataService.getIntegrationConfig(),
-            this.integrationDataService.getWeTravelCredentials()
-        ]);
-
-        if (config?.wetravel_access_token && config.wetravel_access_token_expires_at && !this.isExpiringSoon(config.wetravel_access_token_expires_at)) {
-            return config.wetravel_access_token;
-        }
-
-        if (!credentials?.apiKey || !credentials.orgId) {
-            const message = 'WeTravel seed token is missing';
-            await this.integrationDataService.saveIntegrationConfig({
-                wetravel_status: 'missing_credentials',
-                wetravel_status_error: message
-            });
-            throw new Error(message);
-        }
-
-        this.refreshPromise = this.refreshAccessToken(credentials.apiKey, credentials.orgId);
-
+        this.refreshPromise = this.resolveAccessToken();
         return this.refreshPromise;
     }
 
@@ -75,9 +56,9 @@ export class WeTravelTokenManager {
         };
     }
 
-    private async refreshAccessToken(seedToken: string, orgId: string): Promise<string> {
+    private async refreshAccessToken(seedToken: string): Promise<string> {
         try {
-            const token = await this.authClient.exchangeBearerToken(seedToken, orgId);
+            const token = await this.authClient.exchangeBearerToken(seedToken);
             await this.saveTokenState(token);
             return token.access_token;
         } catch (error) {
@@ -87,6 +68,32 @@ export class WeTravelTokenManager {
                 wetravel_status_error: message
             });
             throw new Error(message);
+        } finally {
+            this.refreshPromise = null;
+        }
+    }
+
+    private async resolveAccessToken(): Promise<string> {
+        try {
+            const [config, credentials] = await Promise.all([
+                this.integrationDataService.getIntegrationConfig(),
+                this.integrationDataService.getWeTravelCredentials()
+            ]);
+
+            if (config?.wetravel_access_token && config.wetravel_access_token_expires_at && !this.isExpiringSoon(config.wetravel_access_token_expires_at)) {
+                return config.wetravel_access_token;
+            }
+
+            if (!credentials?.apiKey) {
+                const message = 'WeTravel seed token is missing';
+                await this.integrationDataService.saveIntegrationConfig({
+                    wetravel_status: 'missing_credentials',
+                    wetravel_status_error: message
+                });
+                throw new Error(message);
+            }
+
+            return await this.refreshAccessToken(credentials.apiKey);
         } finally {
             this.refreshPromise = null;
         }

@@ -50,6 +50,12 @@ jest.mock('../services/integrations/integration-config-service', () => ({
         listWebhookLogs: jest.fn().mockResolvedValue([]),
         getWeTravelStatus: jest.fn().mockResolvedValue({ status: null, error: null }),
         getWeTravelCredentials: jest.fn().mockResolvedValue(null),
+        getWeTravelRolloutGuard: jest.fn().mockResolvedValue({
+            state: 'enabled',
+            enabled: true,
+            canProcess: true,
+            source: 'default'
+        }),
     },
 }));
 
@@ -103,6 +109,7 @@ describe('WeTravel admin page', () => {
         expect(res.text).toContain('WeTravel Integration');
         expect(res.text).toContain('Test Connection');
         expect(res.text).toContain('WeTravel Pro');
+        expect(res.text).toContain('Rollout guard');
     });
 
     it('displays webhook endpoint URL when credentials are saved', async () => {
@@ -115,7 +122,7 @@ describe('WeTravel admin page', () => {
 
         (getUserDetails as jest.Mock).mockResolvedValue(admin);
         (require('../services/integrations/integration-config-service').integrationDataService.getWeTravelCredentials as jest.Mock)
-            .mockResolvedValue({ apiKey: 'masked', orgId: 'org_123' });
+            .mockResolvedValue({ apiKey: 'masked' });
 
         const token = jwt.sign({ user: { email: admin.email } }, JWT_SECRET);
 

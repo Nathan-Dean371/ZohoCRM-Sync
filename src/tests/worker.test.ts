@@ -41,6 +41,12 @@ jest.mock('../services/ventrata/ventrata-webhook-handler', () => {
 jest.mock('../services/integrations/integration-config-service', () => ({
   integrationDataService: {
     updateWebhookLog: jest.fn(),
+    getWeTravelRolloutGuard: jest.fn().mockResolvedValue({
+      state: 'enabled',
+      enabled: true,
+      canProcess: true,
+      source: 'default'
+    }),
   },
 }));
 
@@ -84,12 +90,45 @@ describe('WebhookWorker', () => {
     }));
   });
 
+  it('should skip WeTravel processing when the rollout guard is disabled', async () => {
+    (integrationDataService.getWeTravelRolloutGuard as jest.Mock).mockResolvedValue({
+      state: 'disabled',
+      enabled: false,
+      canProcess: false,
+      source: 'manual'
+    });
+
+    const mockJob = {
+      id: '5',
+      name: 'process-wetravel-webhook',
+      data: { payload: { event: 'booking_update' }, logId: 'log-5' },
+      attemptsMade: 0,
+    } as unknown as Job;
+
+    await capturedProcessor(mockJob);
+
+    expect(mockHandleWebhook).not.toHaveBeenCalled();
+    expect(integrationDataService.updateWebhookLog).toHaveBeenCalledWith('log-5', expect.objectContaining({
+      status: 'SKIPPED',
+      processed_at: expect.any(Date),
+      failure_diagnostics: expect.objectContaining({
+        reason: 'WeTravel sync processing is disabled',
+        guard: expect.objectContaining({
+          state: 'disabled',
+          enabled: false,
+          canProcess: false
+        })
+      })
+    }));
+  });
+
   it('should throw UnrecoverableError for non-retryable errors and mark log as FAILED', async () => {
     const mockJob = {
       id: '2',
       name: 'test-job',
       data: { payload: { event: 'booking_update' }, logId: 'log-2' },
       attemptsMade: 0,
+      opts: { attempts: 5 },
     } as unknown as Job;
 
     const error = new Error('Invalid data');
@@ -101,6 +140,12 @@ describe('WebhookWorker', () => {
     expect(integrationDataService.updateWebhookLog).toHaveBeenCalledWith('log-2', expect.objectContaining({
       status: 'FAILED',
       last_error: 'Non-retryable error: Invalid data',
+      failure_class: 'permanent',
+      failure_diagnostics: expect.objectContaining({
+        failureClass: 'permanent',
+        retryable: false,
+        terminal: true,
+      }),
     }));
   });
 
@@ -110,6 +155,7 @@ describe('WebhookWorker', () => {
       name: 'test-job',
       data: { payload: { event: 'booking_update' }, logId: 'log-3' },
       attemptsMade: 1,
+      opts: { attempts: 5 },
     } as unknown as Job;
 
     const error = new Error('Network error');
@@ -122,6 +168,14 @@ describe('WebhookWorker', () => {
       status: 'RETRYING',
       last_error: 'Network error',
       attempts: 2,
+      failure_class: 'transient',
+      failure_diagnostics: expect.objectContaining({
+        failureClass: 'transient',
+        retryable: true,
+        terminal: false,
+        attemptNumber: 2,
+        maxAttempts: 5,
+      }),
     }));
   });
 
@@ -142,6 +196,14 @@ describe('WebhookWorker', () => {
       status: 'FAILED',
       last_error: 'Final failure',
       dlq_ref: 'bullmq:4',
+      failure_class: 'transient',
+      failure_diagnostics: expect.objectContaining({
+        failureClass: 'transient',
+        retryable: true,
+        terminal: true,
+        attemptNumber: 4,
+        maxAttempts: 3,
+      }),
     }));
   });
 });

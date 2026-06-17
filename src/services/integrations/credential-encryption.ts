@@ -11,21 +11,23 @@ const ALGORITHM = 'aes-256-gcm';
 
 /**
  * Encrypt a credential value using AES-256-GCM.
- * Matches the encryption pattern used for tunnel_credentials.
+ * Uses base64url encoding for compact storage (40% smaller than hex).
  */
 export function encryptCredential(plaintext: string, encryptionKey: string): EncryptedCredential {
     const iv = crypto.randomBytes(16);
     const key = crypto.scryptSync(encryptionKey, 'salt', 32);
     const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
-    let encrypted = cipher.update(plaintext, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
+    const encryptedBuffer = Buffer.concat([
+        cipher.update(plaintext, 'utf8'),
+        cipher.final()
+    ]);
     const authTag = cipher.getAuthTag();
 
     return {
-        encryptedValue: encrypted,
-        iv: iv.toString('hex'),
-        authTag: authTag.toString('hex'),
+        encryptedValue: encryptedBuffer.toString('base64url'),
+        iv: iv.toString('base64url'),
+        authTag: authTag.toString('base64url'),
         algorithm: ALGORITHM
     };
 }
@@ -38,15 +40,17 @@ export function decryptCredential(
     encrypted: EncryptedCredential,
     encryptionKey: string
 ): string {
-    const iv = Buffer.from(encrypted.iv, 'hex');
-    const authTag = Buffer.from(encrypted.authTag, 'hex');
+    const iv = Buffer.from(encrypted.iv, 'base64url');
+    const authTag = Buffer.from(encrypted.authTag, 'base64url');
     const key = crypto.scryptSync(encryptionKey, 'salt', 32);
 
     const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
     decipher.setAuthTag(authTag);
 
-    let decrypted = decipher.update(encrypted.encryptedValue, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
+    const decryptedBuffer = Buffer.concat([
+        decipher.update(Buffer.from(encrypted.encryptedValue, 'base64url')),
+        decipher.final()
+    ]);
 
-    return decrypted;
+    return decryptedBuffer.toString('utf8');
 }

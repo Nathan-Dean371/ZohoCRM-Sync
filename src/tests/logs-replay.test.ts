@@ -49,8 +49,8 @@ describe('Webhook Logs Admin API', () => {
     describe('GET /admin/dashboard/webhook-logs', () => {
         it('should list webhook logs', async () => {
             const mockLogs = [
-                { id: '1', status: 'SUCCESS', attempts: 1, created_at: new Date(), processed_at: new Date(), last_error: null },
-                { id: '2', status: 'FAILED', attempts: 3, created_at: new Date(), processed_at: null, last_error: 'Timeout' }
+                { id: '1', source: 'ventrata', status: 'SUCCESS', attempts: 1, created_at: new Date(), processed_at: new Date(), last_error: null },
+                { id: '2', source: 'wetravel', status: 'FAILED', attempts: 3, created_at: new Date(), processed_at: null, last_error: 'Timeout' }
             ];
             
             (integrationDataService.listWebhookLogs as jest.Mock).mockResolvedValue(mockLogs);
@@ -64,6 +64,8 @@ describe('Webhook Logs Admin API', () => {
             expect(response.text).toContain('FAILED');
             expect(response.text).toContain('Timeout');
             expect(response.text).toContain('Processed At');
+            expect(response.text).toContain('ventrata');
+            expect(response.text).toContain('wetravel');
             expect(integrationDataService.listWebhookLogs).toHaveBeenCalled();
         });
 
@@ -78,14 +80,27 @@ describe('Webhook Logs Admin API', () => {
                 where: { status: 'FAILED' }
             }));
         });
+
+        it('should filter logs by source integration', async () => {
+            (integrationDataService.listWebhookLogs as jest.Mock).mockResolvedValue([]);
+
+            await request(app)
+                .get('/admin/dashboard/webhook-logs?source=wetravel')
+                .set('Cookie', [`auth-token=${adminToken}`]);
+
+            expect(integrationDataService.listWebhookLogs).toHaveBeenCalledWith(expect.objectContaining({
+                where: { source: 'wetravel' }
+            }));
+        });
     });
 
     describe('POST /admin/dashboard/webhook-logs/:id/requeue', () => {
-        it('should requeue a failed job', async () => {
+        it('should requeue a WeTravel job onto the WeTravel handler and preserve status history', async () => {
             const mockLog = { 
                 id: 'log-1', 
                 payload: { test: 'data' }, 
-                status: 'FAILED' 
+                status: 'FAILED',
+                source: 'wetravel'
             };
             
             (integrationDataService.getWebhookLog as jest.Mock).mockResolvedValue(mockLog);
@@ -102,12 +117,35 @@ describe('Webhook Logs Admin API', () => {
                 status: 'RECEIVED',
                 attempts: 0,
                 last_error: null,
-                dlq_ref: null
+                dlq_ref: null,
+                status_history: expect.any(Array)
             });
 
-            expect(ventrataWebhookQueue.add).toHaveBeenCalledWith('process-ventrata-webhook', {
+            expect(ventrataWebhookQueue.add).toHaveBeenCalledWith('process-wetravel-webhook', {
                 payload: mockLog.payload,
                 logId: 'log-1'
+            });
+        });
+
+        it('should requeue a Ventrata job onto the Ventrata handler', async () => {
+            const mockLog = {
+                id: 'log-2',
+                payload: { test: 'data' },
+                status: 'FAILED',
+                source: 'ventrata'
+            };
+
+            (integrationDataService.getWebhookLog as jest.Mock).mockResolvedValue(mockLog);
+            (integrationDataService.updateWebhookLog as jest.Mock).mockResolvedValue({ ...mockLog, status: 'RECEIVED' });
+
+            const response = await request(app)
+                .post('/admin/dashboard/webhook-logs/log-2/requeue')
+                .set('Cookie', [`auth-token=${adminToken}`]);
+
+            expect(response.status).toBe(200);
+            expect(ventrataWebhookQueue.add).toHaveBeenCalledWith('process-ventrata-webhook', {
+                payload: mockLog.payload,
+                logId: 'log-2'
             });
         });
 

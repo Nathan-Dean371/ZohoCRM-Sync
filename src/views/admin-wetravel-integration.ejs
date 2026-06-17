@@ -5,12 +5,24 @@
     <link rel="stylesheet" href="/css/home.css">
     <link rel="stylesheet" href="/css/admin.css">
     <style>
+        main {
+            height: auto;
+            min-height: 100vh;
+            padding: 2rem 0;
+            align-items: flex-start;
+            overflow-y: auto;
+        }
+
+        body {
+            overflow: auto;
+        }
+
         .wetravel-shell {
-            max-width: 980px;
+            max-width: 1400px;
             width: calc(100% - 2rem);
             margin: 0 auto;
             display: grid;
-            grid-template-columns: 1.15fr 0.85fr;
+            grid-template-columns: 1.15fr 0.85fr 1fr;
             gap: 1rem;
         }
 
@@ -155,10 +167,38 @@
             line-height: 1.55;
         }
 
-        @media (max-width: 900px) {
+        @media (max-width: 1200px) {
             .wetravel-shell {
                 grid-template-columns: 1fr;
             }
+        }
+
+        .sync-status {
+            padding: 1rem;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-top: 1rem;
+        }
+
+        .sync-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .sync-stat:last-child {
+            border-bottom: none;
+        }
+
+        .sync-stat-label {
+            color: rgba(255,255,255,0.75);
+        }
+
+        .sync-stat-value {
+            color: #fff;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -178,6 +218,10 @@
                     </p>
                 </div>
 
+                <div class="wetravel-note" style="margin-bottom: 1rem;">
+                    <strong>Rollout guard:</strong> <%= rolloutGuard.state %> <span style="opacity: 0.85;">(processing <%= rolloutGuard.enabled ? 'enabled' : 'paused' %>)</span>
+                </div>
+
                 <% if (error) { %>
                     <div class="wetravel-note" style="margin-bottom: 1rem; border-color: rgba(244, 67, 54, 0.4); background: rgba(244, 67, 54, 0.16);">
                         <strong>Error:</strong> <%= error %>
@@ -190,17 +234,11 @@
                     </div>
                 <% } %>
 
-                <div class="wetravel-grid">
-                    <div>
-                        <label class="fieldLabel" for="wetravelOrgId">Organization ID</label>
-                        <input id="wetravelOrgId" class="fieldInput" type="text" value="<%= orgId %>" placeholder="org_12345" autocomplete="off">
-                        <div class="helperText">Use the main WeTravel organization that owns the integration credentials.</div>
-                    </div>
-
+                <div class="wetravel-grid" style="grid-template-columns: 1fr;">
                     <div>
                         <label class="fieldLabel" for="wetravelApiKey">API Key</label>
                         <input id="wetravelApiKey" class="fieldInput" type="password" placeholder="Paste the WeTravel API key" autocomplete="off">
-                        <div class="helperText">The API key is encrypted at rest after you save it. The UI never re-displays the secret value.</div>
+                        <div class="helperText">The API key is encrypted at rest after you save it. The UI never re-displays the secret value. Organization ID is not required for the v2 setup flow.</div>
                     </div>
                 </div>
 
@@ -250,52 +288,50 @@
                     </div>
                 </div>
             </aside>
-        </div>
 
-        <% if (credentialsPresent) { %>
-        <div class="wetravel-shell" style="margin-top: 2rem;">
-            <section class="card wetravel-card">
-                <div class="wetravel-hero">
-                    <h2 style="margin: 0;">Webhook Setup</h2>
-                    <p class="subtle">
-                        Register this webhook endpoint in WeTravel/Svix to receive booking and event notifications.
-                    </p>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <h3 style="margin: 0.5rem 0; color: #f7fbfb;">Endpoint URL</h3>
-                    <div style="padding: 0.9rem 1rem; border-radius: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(17, 157, 164, 0.35); font-family: monospace; word-break: break-all; color: #a7f3f5; font-size: 0.95rem;">
-                        <%= webhookUrl %>
+            <aside class="card wetravel-card">
+                <% if (credentialsPresent) { %>
+                    <div class="wetravel-hero">
+                        <h2 style="margin: 0;">Webhook Setup</h2>
+                        <p class="subtle">
+                            Register this webhook endpoint in WeTravel/Svix to receive booking and event notifications.
+                        </p>
                     </div>
-                </div>
 
-                <div style="background: rgba(17, 157, 164, 0.14); border: 1px solid rgba(17, 157, 164, 0.35); border-radius: 12px; padding: 1rem;">
-                    <h3 style="margin: 0.5rem 0; color: #f7fbfb;">Steps to Register</h3>
-                    <ol style="margin: 0.75rem 0; padding-left: 1.25rem; color: rgba(255,255,255,0.85); line-height: 1.65;">
-                        <li style="margin-bottom: 0.65rem;">
-                            <strong>Copy the endpoint URL above.</strong> This is the unique webhook address for your WeTravel integration.
-                        </li>
-                        <li style="margin-bottom: 0.65rem;">
-                            <strong>Log in to WeTravel or Svix admin panel.</strong> Use the same account you provided credentials for above.
-                        </li>
-                        <li style="margin-bottom: 0.65rem;">
-                            <strong>Find the Webhook or Integration settings.</strong> Navigate to the integrations or webhooks section.
-                        </li>
-                        <li style="margin-bottom: 0.65rem;">
-                            <strong>Add a new webhook endpoint.</strong> Paste the URL and select the events you want to receive (e.g., booking updates, customer changes).
-                        </li>
-                        <li style="margin-bottom: 0.65rem;">
-                            <strong>Save and test.</strong> WeTravel/Svix will send a test event. Check that this app receives and logs it successfully.
-                        </li>
-                        <li>
-                            <strong>Monitor webhook logs.</strong> View received events and any failures in the <a href="/admin/dashboard/webhook-logs" style="color: #a7f3f5; text-decoration: underline;">Webhook Logs & DLQ</a> page.
-                        </li>
-                    </ol>
-                </div>
+                    <div style="margin-bottom: 1.5rem;">
+                        <h3 style="margin: 0.5rem 0; color: #f7fbfb;">Endpoint URL</h3>
+                        <div style="padding: 0.9rem 1rem; border-radius: 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(17, 157, 164, 0.35); font-family: monospace; word-break: break-all; color: #a7f3f5; font-size: 0.95rem;">
+                            <%= webhookUrl %>
+                        </div>
+                    </div>
 
-                <div style="margin-top: 1rem; padding: 0.9rem 1rem; border-radius: 12px; background: rgba(76, 175, 80, 0.16); border: 1px solid rgba(76, 175, 80, 0.35); color: #d8f5db;">
-                    <strong>✓ Credentials saved.</strong> Your WeTravel credentials are stored securely. Once the webhook is registered, events will automatically flow into this app.
-                </div>
+                    <div style="background: rgba(17, 157, 164, 0.14); border: 1px solid rgba(17, 157, 164, 0.35); border-radius: 12px; padding: 1rem;">
+                        <h3 style="margin: 0.5rem 0; color: #f7fbfb;">Steps to Register</h3>
+                        <ol style="margin: 0.75rem 0; padding-left: 1.25rem; color: rgba(255,255,255,0.85); line-height: 1.65;">
+                            <li style="margin-bottom: 0.65rem;">
+                                <strong>Copy the endpoint URL above.</strong> This is the unique webhook address for your WeTravel integration.
+                            </li>
+                            <li style="margin-bottom: 0.65rem;">
+                                <strong>Log in to WeTravel or Svix admin panel.</strong> Use the same account you provided credentials for above.
+                            </li>
+                            <li style="margin-bottom: 0.65rem;">
+                                <strong>Find the Webhook or Integration settings.</strong> Navigate to the integrations or webhooks section.
+                            </li>
+                            <li style="margin-bottom: 0.65rem;">
+                                <strong>Add a new webhook endpoint.</strong> Paste the URL and select the events you want to receive (e.g., booking updates, customer changes).
+                            </li>
+                            <li style="margin-bottom: 0.65rem;">
+                                <strong>Save and test.</strong> WeTravel/Svix will send a test event. Check that this app receives and logs it successfully.
+                            </li>
+                            <li>
+                                <strong>Monitor webhook logs.</strong> View received events and any failures in the <a href="/admin/dashboard/webhook-logs" style="color: #a7f3f5; text-decoration: underline;">Webhook Logs & DLQ</a> page.
+                            </li>
+                        </ol>
+                    </div>
+
+                    <div style="margin-top: 1rem; padding: 0.9rem 1rem; border-radius: 12px; background: rgba(76, 175, 80, 0.16); border: 1px solid rgba(76, 175, 80, 0.35); color: #d8f5db;">
+                        <strong>✓ Credentials saved.</strong> Your WeTravel credentials are stored securely. Once the webhook is registered, events will automatically flow into this app.
+                    </div>
 
                     <div class="buttonRow" style="margin-top: 1rem;">
                         <button id="testWebhookButton" type="button" class="actionButton">Send Test Webhook</button>
@@ -303,18 +339,67 @@
                     </div>
 
                     <div id="webhookTestBox" class="responseBox">Click "Send Test Webhook" to verify your setup.</div>
-            </section>
-        </div>
-        <% } else { %>
-        <div class="wetravel-shell" style="margin-top: 2rem;">
-            <section class="card wetravel-card">
-                <div style="padding: 1rem; border-radius: 12px; background: rgba(255, 193, 7, 0.16); border: 1px solid rgba(255, 193, 7, 0.35); color: #fff2bf;">
-                    <strong>Webhook Setup</strong><br>
-                    <p class="subtle" style="margin: 0.5rem 0 0 0;">Save credentials first to configure webhooks. Once WeTravel credentials are saved and validated, webhook setup instructions and the endpoint URL will appear here.</p>
+                <% } else { %>
+                    <div class="wetravel-hero">
+                        <h2 style="margin: 0;">Webhook Setup</h2>
+                    </div>
+                    <div style="padding: 1rem; border-radius: 12px; background: rgba(255, 193, 7, 0.16); border: 1px solid rgba(255, 193, 7, 0.35); color: #fff2bf;">
+                        <strong>Credentials required</strong><br>
+                        <p class="subtle" style="margin: 0.5rem 0 0 0;">Save credentials first to configure webhooks. Once WeTravel credentials are saved and validated, webhook setup instructions and the endpoint URL will appear here.</p>
+                    </div>
+                <% } %>
+            </aside>
+
+            <!-- Historic Contact Sync Section -->
+            <% if (credentialsPresent) { %>
+            <section class="card wetravel-card" style="grid-column: 1 / -1;">
+                <div class="wetravel-hero">
+                    <h2 style="margin: 0;">Historic Contact Sync</h2>
+                    <p class="subtle">
+                        Import existing WeTravel contacts and bookings into Zoho CRM. This is a one-time backfill operation that syncs historical data.
+                    </p>
+                </div>
+
+                <div class="wetravel-note" style="margin-bottom: 1rem;">
+                    <strong>How it works:</strong> This process fetches all trips from your WeTravel account, then retrieves bookings for each trip and creates/updates corresponding contacts in Zoho CRM. Duplicate contacts are automatically deduplicated by email address.
+                </div>
+
+                <div class="buttonRow">
+                    <button id="startSyncButton" type="button" class="actionButton">Start Historic Sync</button>
+                    <button id="checkSyncStatusButton" type="button" class="actionButton secondary" style="display: none;">Check Sync Status</button>
+                </div>
+
+                <div id="syncStatusBox" class="responseBox">Click "Start Historic Sync" to begin importing contacts from WeTravel.</div>
+
+                <div id="syncDetailsBox" style="display: none;" class="sync-status">
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Job ID:</span>
+                        <span class="sync-stat-value" id="syncJobId">-</span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Status:</span>
+                        <span class="sync-stat-value" id="syncStatus">-</span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Contacts Processed:</span>
+                        <span class="sync-stat-value" id="syncProcessed">0</span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Contacts Failed:</span>
+                        <span class="sync-stat-value" id="syncFailed">0</span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Started At:</span>
+                        <span class="sync-stat-value" id="syncStartedAt">-</span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Completed At:</span>
+                        <span class="sync-stat-value" id="syncCompletedAt">-</span>
+                    </div>
                 </div>
             </section>
+            <% } %>
         </div>
-        <% } %>
     </main>
 
     <script>
@@ -324,7 +409,6 @@
             const testButton = document.getElementById('testConnectionButton');
             const saveButton = document.getElementById('saveCredentialsButton');
             const apiKeyInput = document.getElementById('wetravelApiKey');
-            const orgIdInput = document.getElementById('wetravelOrgId');
             const testWebhookButton = document.getElementById('testWebhookButton');
             const webhookTestBox = document.getElementById('webhookTestBox');
 
@@ -372,8 +456,7 @@
 
                 try {
                     const result = await postJson('/admin/integrations/wetravel/validate', {
-                        apiKey: apiKeyInput.value,
-                        orgId: orgIdInput.value
+                        apiKey: apiKeyInput.value
                     });
 
                     updateStatus(result);
@@ -392,8 +475,7 @@
 
                 try {
                     const result = await postJson('/admin/integrations/wetravel/save', {
-                        apiKey: apiKeyInput.value,
-                        orgId: orgIdInput.value
+                        apiKey: apiKeyInput.value
                     });
 
                     updateStatus({ status: result.status });
@@ -404,6 +486,82 @@
                         : 'Save failed unexpectedly.';
                 }
             });
+
+            // Historic Sync functionality
+            const startSyncButton = document.getElementById('startSyncButton');
+            const checkSyncStatusButton = document.getElementById('checkSyncStatusButton');
+            const syncStatusBox = document.getElementById('syncStatusBox');
+            const syncDetailsBox = document.getElementById('syncDetailsBox');
+            let currentJobId = null;
+
+            function updateSyncUI(data) {
+                if (data.id) {
+                    currentJobId = data.id;
+                    checkSyncStatusButton.style.display = 'inline-block';
+                }
+
+                if (data.id || data.status) {
+                    syncDetailsBox.style.display = 'block';
+                    
+                    if (data.id) document.getElementById('syncJobId').textContent = data.id;
+                    if (data.status) document.getElementById('syncStatus').textContent = data.status;
+                    if (data.contactsProcessed !== undefined) document.getElementById('syncProcessed').textContent = data.contactsProcessed;
+                    if (data.contactsFailed !== undefined) document.getElementById('syncFailed').textContent = data.contactsFailed;
+                    if (data.startedAt) document.getElementById('syncStartedAt').textContent = new Date(data.startedAt).toLocaleString();
+                    if (data.completedAt) document.getElementById('syncCompletedAt').textContent = new Date(data.completedAt).toLocaleString();
+                }
+            }
+
+            if (startSyncButton) {
+                startSyncButton.addEventListener('click', async () => {
+                    if (!confirm('This will start importing all historic contacts from WeTravel into Zoho CRM. Continue?')) {
+                        return;
+                    }
+
+                    syncStatusBox.textContent = 'Starting historic contact sync... This may take several minutes depending on the number of trips and bookings.';
+                    startSyncButton.disabled = true;
+
+                    try {
+                        const result = await postJson('/admin/api/wetravel/import-contacts', {});
+
+                        syncStatusBox.textContent = result.message || 'Sync completed successfully!';
+                        updateSyncUI(result.result);
+                    } catch (error) {
+                        syncStatusBox.textContent = error && error.error
+                            ? 'Error: ' + error.error + (error.message ? ' - ' + error.message : '')
+                            : 'Sync failed unexpectedly.';
+                    } finally {
+                        startSyncButton.disabled = false;
+                    }
+                });
+            }
+
+            if (checkSyncStatusButton) {
+                checkSyncStatusButton.addEventListener('click', async () => {
+                    if (!currentJobId) {
+                        syncStatusBox.textContent = 'No job ID available. Start a sync first.';
+                        return;
+                    }
+
+                    syncStatusBox.textContent = 'Checking sync status...';
+
+                    try {
+                        const response = await fetch('/admin/api/wetravel/import-status/' + currentJobId);
+                        
+                        if (!response.ok) {
+                            throw await response.json();
+                        }
+
+                        const data = await response.json();
+                        syncStatusBox.textContent = 'Status updated.';
+                        updateSyncUI(data);
+                    } catch (error) {
+                        syncStatusBox.textContent = error && error.error
+                            ? 'Error: ' + error.error
+                            : 'Failed to check status.';
+                    }
+                });
+            }
 
                 if (testWebhookButton) {
                     testWebhookButton.addEventListener('click', async () => {

@@ -34,6 +34,12 @@ jest.mock('../services/database/databaseConnector', () => ({
     getUserDetails: jest.fn(),
 }));
 
+jest.mock('../services/queue', () => ({
+    ventrataWebhookQueue: {
+        add: jest.fn().mockResolvedValue({ id: 'job-1' })
+    }
+}));
+
 jest.mock('bullmq', () => ({
     Queue: jest.fn().mockImplementation(() => ({
         add: jest.fn().mockResolvedValue({ id: 'job-1' }),
@@ -58,6 +64,17 @@ jest.mock('../services/integrations/integration-config-service', () => ({
 import app from '../app';
 
 describe('WeTravel Webhook Endpoint - POST /api/webhook/wetravel', () => {
+    const configuredSecret = 'wetravel-test-secret';
+    const originalSecret = process.env.WE_TRAVEL_WEBHOOK_SECRET;
+
+    beforeAll(() => {
+        process.env.WE_TRAVEL_WEBHOOK_SECRET = configuredSecret;
+    });
+
+    afterAll(() => {
+        process.env.WE_TRAVEL_WEBHOOK_SECRET = originalSecret;
+    });
+
     beforeEach(() => {
         jest.clearAllMocks();
     });
@@ -84,7 +101,7 @@ describe('WeTravel Webhook Endpoint - POST /api/webhook/wetravel', () => {
 
         const response = await request(app)
             .post('/api/webhook/wetravel')
-            .set('X-Webhook-Secret', 'wetravel-test-secret')
+            .set('X-Webhook-Secret', configuredSecret)
             .send(mockEvent);
 
         expect(response.status).toBe(200);
@@ -96,6 +113,22 @@ describe('WeTravel Webhook Endpoint - POST /api/webhook/wetravel', () => {
                 status: 'RECEIVED'
             })
         );
+    });
+
+    it('Rejects webhook with an invalid X-Webhook-Secret value', async () => {
+        const mockEvent = {
+            id: 'evt_123456',
+            type: 'booking.created'
+        };
+
+        const response = await request(app)
+            .post('/api/webhook/wetravel')
+            .set('X-Webhook-Secret', 'wrong-secret')
+            .send(mockEvent);
+
+        expect(response.status).toBe(401);
+        expect(response.body).toHaveProperty('error');
+        expect(response.body.error).toContain('Invalid X-Webhook-Secret');
     });
 
     it('Rejects webhook without X-Webhook-Secret authentication header', async () => {

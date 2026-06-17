@@ -9,7 +9,7 @@ export interface WeTravelBearerToken {
 }
 
 export interface WeTravelAuthClient {
-    exchangeBearerToken(seedToken: string, orgId: string): Promise<WeTravelBearerToken>;
+    exchangeBearerToken(seedToken: string, orgId?: string): Promise<WeTravelBearerToken>;
 }
 
 export interface WeTravelAuthServiceOptions {
@@ -22,24 +22,19 @@ export class WeTravelAuthService implements WeTravelAuthClient {
     private readonly tokenEndpoint: string;
 
     constructor(options: WeTravelAuthServiceOptions = {}) {
-        this.apiBaseUrl = options.apiBaseUrl || process.env.WETRAVEL_API_BASE_URL || 'https://api.wetravel.com';
-        this.tokenEndpoint = options.tokenEndpoint || process.env.WETRAVEL_TOKEN_URL || `${this.apiBaseUrl}/oauth/token`;
+        const configuredBaseUrl = options.apiBaseUrl || process.env.WETRAVEL_API_BASE_URL || 'https://api.wetravel.com/v2';
+        this.apiBaseUrl = this.normalizeApiBaseUrl(configuredBaseUrl);
+        // Use v2 auth/tokens/access endpoint by default per WeTravel v2 docs.
+        this.tokenEndpoint = options.tokenEndpoint || process.env.WETRAVEL_TOKEN_URL || `${this.apiBaseUrl}/auth/tokens/access`;
     }
 
-    async exchangeBearerToken(seedToken: string, orgId: string): Promise<WeTravelBearerToken> {
-        const formBody = new URLSearchParams({
-            grant_type: 'refresh_token',
-            refresh_token: seedToken,
-            organization_id: orgId
-        });
-
+    async exchangeBearerToken(seedToken: string, orgId?: string): Promise<WeTravelBearerToken> {
         const response = await fetch(this.tokenEndpoint, {
             method: 'POST',
             headers: {
                 Accept: 'application/json',
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: formBody.toString()
+                Authorization: `Bearer ${seedToken}`
+            }
         });
 
         if (!response.ok) {
@@ -55,22 +50,75 @@ export class WeTravelAuthService implements WeTravelAuthClient {
             [key: string]: unknown;
         };
 
-        if (!payload.access_token || typeof payload.expires_in !== 'number') {
-            throw new Error('WeTravel token exchange response was missing required token fields');
+        console.log('WeTravel token exchange response:', JSON.stringify(payload, null, 2));
+
+        if (!payload.access_token) {
+            console.error('WeTravel token exchange validation failed: missing access_token');
+            throw new Error('WeTravel token exchange response was missing access_token');
+        }
+
+        // WeTravel v2 API returns JWT tokens with exp claim embedded
+        // Extract expiration from JWT if expires_in is not provided
+        let expiresAt: number;
+        let expiresIn: number;
+
+        if (typeof payload.expires_in === 'number') {
+            expiresIn = payload.expires_in;
+            expiresAt = Date.now() + (expiresIn * 1000);
+        } else {
+            // Decode JWT to extract exp claim
+            const jwtPayload = this.decodeJwt(payload.access_token);
+            if (jwtPayload.exp) {
+                // exp is in seconds, convert to milliseconds
+                expiresAt = jwtPayload.exp * 1000;
+                expiresIn = Math.floor((expiresAt - Date.now()) / 1000);
+                console.log('Extracted expiration from JWT:', { expiresAt: new Date(expiresAt), expiresIn });
+            } else {
+                // Fallback: assume 1 hour (WeTravel default)
+                expiresIn = 3600;
+                expiresAt = Date.now() + (expiresIn * 1000);
+                console.warn('No expiration found in JWT, using default 1 hour');
+            }
         }
 
         return {
             access_token: payload.access_token,
             refresh_token: payload.refresh_token,
-            expires_at: Date.now() + (payload.expires_in * 1000),
+            expires_at: expiresAt,
             token_type: payload.token_type || 'Bearer',
             metadata: {
-                organization_id: orgId,
                 scope: payload.scope ?? null,
                 token_type: payload.token_type || 'Bearer',
-                expires_in: payload.expires_in
+                expires_in: expiresIn
             }
         };
+    }
+
+    private decodeJwt(token: string): { exp?: number; iat?: number; [key: string]: any } {
+        try {
+            const parts = token.split('.');
+            if (parts.length !== 3) {
+                return {};
+            }
+            // Decode base64url payload (second part)
+            const payload = parts[1];
+            const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+            const decoded = Buffer.from(base64, 'base64').toString('utf-8');
+            return JSON.parse(decoded);
+        } catch (error) {
+            console.warn('Failed to decode JWT:', error);
+            return {};
+        }
+    }
+
+    private normalizeApiBaseUrl(apiBaseUrl: string): string {
+        const trimmedBase = apiBaseUrl.replace(/\/$/, '');
+
+        if (trimmedBase.endsWith('/v2')) {
+            return trimmedBase;
+        }
+
+        return `${trimmedBase}/v2`;
     }
 }
 

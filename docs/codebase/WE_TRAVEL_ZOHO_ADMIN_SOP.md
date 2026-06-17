@@ -30,6 +30,7 @@ Before you start, confirm the following:
 - You know which Zoho organization will receive the sync.
 - You have a WeTravel account on a plan that supports the integration setup required by the app.
 - You are using the main WeTravel account that is allowed to create integration credentials.
+- You do not need to supply an organization ID for the v2 admin setup flow.
 - You are prepared to create or verify a custom booking module in Zoho.
 
 ## Entity 1: Contacts

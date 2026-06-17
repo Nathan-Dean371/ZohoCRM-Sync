@@ -24,6 +24,7 @@ import { create } from 'domain';
 import managerRoutes from './routes/manager.routes';
 import managerTunnelsRouter from './routes/managerTunnels.routes';
 import wetravelIntegrationRoutes from './routes/wetravel-integration.routes';
+import wetravelSyncRoutes from './routes/wetravel-sync.routes';
 import ZohoAuthService from './services/zoho/zoho-auth';
 import { integrationDataService } from './services/integrations/integration-config-service';
 
@@ -69,6 +70,7 @@ connectToDatabase();
 // Mount the API key check route
 app.use('/api/', apiKeyRoute)
 app.use('/api', webhookRoutes);
+app.use('/admin/api/wetravel', wetravelSyncRoutes);
 app.use('/', wetravelIntegrationRoutes);
 app.post('/api/:id/webhook', (req: Request, res: Response) =>
 {
@@ -318,6 +320,7 @@ app.delete('/admin/dashboard/tunnels/:id', async (req: Request, res: Response) =
       try {
         const status = await integrationDataService.getWeTravelStatus();
         const credentials = await integrationDataService.getWeTravelCredentials();
+        const rolloutGuard = await integrationDataService.getWeTravelRolloutGuard();
 
         const statusLabel = status.status === 'connected'
           ? 'Connected'
@@ -344,11 +347,12 @@ app.delete('/admin/dashboard/tunnels/:id', async (req: Request, res: Response) =
         res.render('admin-wetravel-integration', {
           title: 'WeTravel Integration',
           user: req.user,
+          companyId: (req.user as any)?.company_id || null,
           status,
           statusLabel,
           statusTone,
           credentialsPresent: !!credentials,
-          orgId: credentials?.orgId ?? '',
+          rolloutGuard,
           webhookUrl,
           error: req.query.error,
           success: req.query.success
