@@ -152,6 +152,8 @@ model WeTravelImportJob {
   status              String    @db.VarChar(20) // "in_progress", "completed", "failed"
   contacts_processed  Int       @default(0)
   contacts_failed     Int       @default(0)
+  bookings_processed  Int       @default(0)
+  bookings_failed     Int       @default(0)
   error_message       String?   @db.Text
   started_at          DateTime  @default(now()) @db.Timestamptz(6)
   completed_at        DateTime? @db.Timestamptz(6)

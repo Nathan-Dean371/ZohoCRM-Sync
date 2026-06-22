@@ -20,7 +20,7 @@ export class WeTravelHttpClient implements WeTravelApiClient {
     async fetchTrips(): Promise<WeTravelTrip[]> {
         const token = await this.tokenManager.getAccessToken();
         // Fetch all trips (upcoming, past, draft, etc.) - per WeTravel API docs
-        const url = `${this.apiBaseUrl}/trips`;
+        const url = `${this.apiBaseUrl}/draft_trips`;
         
         console.log('Fetching WeTravel trips from:', url);
         
@@ -44,16 +44,22 @@ export class WeTravelHttpClient implements WeTravelApiClient {
         console.log('WeTravel API raw response structure:', JSON.stringify(rawResponse, null, 2));
         
         // WeTravel API returns a direct array, not wrapped in an object
-        let trips: WeTravelTrip[];
+        let rawTrips: any[];
         if (Array.isArray(rawResponse)) {
-            trips = rawResponse;
+            rawTrips = rawResponse;
         } else if (rawResponse.trips && Array.isArray(rawResponse.trips)) {
-            trips = rawResponse.trips;
+            rawTrips = rawResponse.trips;
         } else if (rawResponse.data && Array.isArray(rawResponse.data)) {
-            trips = rawResponse.data;
+            rawTrips = rawResponse.data;
         } else {
-            trips = [];
+            rawTrips = [];
         }
+        
+        // Normalize API response: API returns 'id' and 'title', we need 'uuid' and 'name'
+        const trips: WeTravelTrip[] = rawTrips.map(trip => ({
+            uuid: String(trip.id || trip.uuid),
+            name: trip.title || trip.name
+        }));
         
         console.log(`Parsed ${trips.length} trips from response`);
         return trips;
@@ -101,22 +107,32 @@ export class WeTravelHttpClient implements WeTravelApiClient {
     }
 
     async fetchBookings(tripUuid: string): Promise<WeTravelBooking[]> {
-        const token = await this.tokenManager.getAccessToken();
-        
-        const response = await fetch(`${this.apiBaseUrl}/trips/${tripUuid}/bookings`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
-            }
+        // WeTravel API doesn't have /trips/{id}/bookings endpoint
+        // Instead, use /lead endpoint with trip_uuids filter and is_booked=true
+        const response = await this.fetchLeads({
+            trip_uuids: [tripUuid],
+            is_booked: true,
+            per_page: 100
         });
 
-        if (!response.ok) {
-            throw new Error(`WeTravel API error: ${response.status} ${response.statusText}`);
-        }
+        // Convert leads to booking format
+        const bookings: WeTravelBooking[] = response.leads.map(lead => ({
+            id: String(lead.id),
+            reference: lead.id ? String(lead.id) : undefined,
+            product_name: lead.trip?.title,
+            travel_date: lead.trip?.start_date,
+            start_date: lead.trip?.start_date,
+            created_at: lead.created_at,
+            buyer: {
+                first_name: lead.first_name,
+                last_name: lead.last_name,
+                email: lead.email,
+                phone: lead.phone,
+                country: lead.country
+            }
+        }));
 
-        const data = await response.json() as { bookings?: WeTravelBooking[] };
-        return data.bookings || [];
+        return bookings;
     }
 
     private normalizeApiBaseUrl(url: string): string {

@@ -5,6 +5,7 @@ import ZohoCRMService from '../services/zoho/zoho-crm-service';
 import { WeTravelTokenManager } from '../services/integrations/wetravel-token-manager';
 import { integrationDataService } from '../services/integrations/integration-config-service';
 import { WeTravelAuthService } from '../services/integrations/wetravel-auth';
+import { idempotencyService } from '../services/database/idempotency-service';
 
 const router = Router();
 
@@ -33,7 +34,8 @@ router.post('/import-contacts', async (req: Request, res: Response): Promise<voi
         const syncService = new WeTravelHistoricContactSyncService(
             weTravelClient,
             zohoService,
-            tokenManager
+            tokenManager,
+            idempotencyService
         );
 
         // Start import
@@ -68,7 +70,8 @@ router.get('/import-status/:jobId', async (req: Request, res: Response): Promise
         const syncService = new WeTravelHistoricContactSyncService(
             weTravelClient,
             zohoService,
-            tokenManager
+            tokenManager,
+            idempotencyService
         );
 
         const status = await syncService.getImportStatus(jobId);

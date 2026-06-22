@@ -20,10 +20,19 @@ Add a historical import flow that pulls existing WeTravel bookings from the API,
 
 ## Blocked by
 
-- #30 WeTravel historic contact backfill into Zoho
+- #29 WeTravel historic contact backfill into Zoho
 - WeTravel auth/token storage and refresh flow
 - Zoho custom booking module readiness
 - Shared import/idempotency plumbing
+
+## Implementation Slices
+
+This feature has been broken down into the following vertical slices:
+
+- #035 WeTravel booking sync database schema
+- #036 WeTravel single booking sync tracer bullet
+- #037 WeTravel all bookings sync with isolated error handling
+- #038 WeTravel booking sync metrics in admin UI
 
 ## Tags
 

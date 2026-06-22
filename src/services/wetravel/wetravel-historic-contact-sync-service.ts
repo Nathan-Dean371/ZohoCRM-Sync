@@ -1,5 +1,7 @@
 import type ZohoCRMService from '../zoho/zoho-crm-service';
 import type { WeTravelTokenManager } from '../integrations/wetravel-token-manager';
+import type { IdempotencyService } from '../database/idempotency-service';
+import type { ZohoVentrataBooking } from '../../types/zoho';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -11,6 +13,11 @@ export interface WeTravelTrip {
 
 export interface WeTravelBooking {
     id: string;
+    reference?: string;
+    product_name?: string;
+    travel_date?: string;
+    start_date?: string;
+    created_at?: string;
     buyer: {
         first_name?: string;
         last_name?: string;
@@ -31,6 +38,8 @@ export interface ImportStatus {
     status: 'completed' | 'in_progress' | 'failed';
     contactsProcessed: number;
     contactsFailed: number;
+    bookingsProcessed: number;
+    bookingsFailed: number;
     startedAt?: Date;
     completedAt?: Date;
     errorMessage?: string;
@@ -48,7 +57,8 @@ export class WeTravelHistoricContactSyncService {
     constructor(
         private readonly weTravelClient: WeTravelApiClient,
         private readonly zohoService: ZohoCRMService,
-        private readonly tokenManager: WeTravelTokenManager
+        private readonly tokenManager: WeTravelTokenManager,
+        private readonly idService: IdempotencyService
     ) {}
 
     async startImport(companyId: string): Promise<ImportStatus> {
@@ -73,18 +83,86 @@ export class WeTravelHistoricContactSyncService {
                 const uniqueContacts = this.normalizeLeads(leads);
                 console.log(`Extracted ${uniqueContacts.length} unique contacts to sync to Zoho`);
 
+                // Track synced contacts with their Zoho IDs (keyed by email/phone)
+                const contactIdMap = new Map<string, string>();
+                
                 // Upsert each contact to Zoho
-                let processed = 0;
-                let failed = 0;
+                let contactsProcessed = 0;
+                let contactsFailed = 0;
 
                 for (const contact of uniqueContacts) {
                     try {
-                        await this.zohoService.upsertContact(contact);
-                        processed++;
+                        const zohoContact = await this.zohoService.upsertContact(contact);
+                        contactsProcessed++;
                         console.log(`✓ Synced contact: ${contact.First_Name} ${contact.Last_Name} (${contact.Email})`);
+                        
+                        // Store mapping for booking sync
+                        const contactKey = contact.Email?.toLowerCase() || `phone:${contact.Phone}`;
+                        if (zohoContact.id) {
+                            contactIdMap.set(contactKey, zohoContact.id);
+                        }
                     } catch (error) {
                         console.error('Failed to upsert contact:', error);
-                        failed++;
+                        contactsFailed++;
+                    }
+                }
+
+                // Now sync bookings: fetch all trips and bookings
+                console.log('Fetching trips and bookings for booking sync...');
+                const trips = await this.weTravelClient.fetchTrips();
+                console.log(`Fetched ${trips.length} trips from WeTravel`);
+                
+                const allBookings: WeTravelBooking[] = [];
+                for (const trip of trips) {
+                    console.log(`Fetching bookings for trip: ${trip.uuid} (${trip.name})`);
+                    const bookings = await this.weTravelClient.fetchBookings(trip.uuid);
+                    console.log(`  Found ${bookings.length} bookings`);
+                    allBookings.push(...bookings);
+                }
+                
+                console.log(`Total bookings across all trips: ${allBookings.length}`);
+                
+                // Sync bookings to Zoho
+                let bookingsProcessed = 0;
+                let bookingsFailed = 0;
+                
+                for (const booking of allBookings) {
+                    try {
+                        // Find the corresponding contact by email or phone
+                        const bookingKey = booking.buyer.email?.toLowerCase() || `phone:${booking.buyer.phone}`;
+                        const contactId = contactIdMap.get(bookingKey);
+                        
+                        if (!contactId) {
+                            console.log(`Skipping booking ${booking.id} - contact not found in sync`);
+                            bookingsFailed++;
+                            continue;
+                        }
+                        
+                        // Skip bookings without required fields
+                        if (!booking.reference || !booking.product_name) {
+                            console.log(`Skipping booking ${booking.id} - missing required fields`);
+                            bookingsFailed++;
+                            continue;
+                        }
+                        
+                        const normalizedBooking = this.normalizeBooking(booking, contactId);
+                        const zohoBooking = await this.zohoService.upsertBooking(normalizedBooking);
+                        
+                        // Track in idempotency map
+                        if (zohoBooking.id) {
+                            await this.idService.saveMapping(
+                                booking.reference,
+                                'wetravel_booking',
+                                zohoBooking.id,
+                                'booking'
+                            );
+                        }
+                        
+                        bookingsProcessed++;
+                        console.log(`✓ Synced booking: ${booking.reference} for contact ${booking.buyer.email}`);
+                    } catch (error) {
+                        console.error(`Failed to sync booking ${booking.id}:`, error);
+                        bookingsFailed++;
                     }
                 }
 
@@ -93,8 +171,10 @@ export class WeTravelHistoricContactSyncService {
                     where: { id: job.id },
                     data: {
                         status: 'completed',
-                        contacts_processed: processed,
-                        contacts_failed: failed,
+                        contacts_processed: contactsProcessed,
+                        contacts_failed: contactsFailed,
+                        bookings_processed: bookingsProcessed,
+                        bookings_failed: bookingsFailed,
                         completed_at: new Date()
                     }
                 });
@@ -102,8 +182,10 @@ export class WeTravelHistoricContactSyncService {
                 return {
                     id: updatedJob.id,
                     status: 'completed',
-                    contactsProcessed: processed,
-                    contactsFailed: failed,
+                    contactsProcessed,
+                    contactsFailed,
+                    bookingsProcessed,
+                    bookingsFailed,
                     startedAt: updatedJob.started_at,
                     completedAt: updatedJob.completed_at ?? undefined
                 };
@@ -128,18 +210,56 @@ export class WeTravelHistoricContactSyncService {
             const uniqueContacts = this.deduplicateContacts(allBookings);
             console.log(`Extracted ${uniqueContacts.length} unique contacts to sync to Zoho`);
 
-            // Upsert each contact to Zoho
-            let processed = 0;
-            let failed = 0;
+            // Upsert each contact and their bookings to Zoho
+            let contactsProcessed = 0;
+            let contactsFailed = 0;
+            let bookingsProcessed = 0;
+            let bookingsFailed = 0;
 
             for (const contact of uniqueContacts) {
                 try {
-                    await this.zohoService.upsertContact(contact);
-                    processed++;
+                    const zohoContact = await this.zohoService.upsertContact(contact);
+                    contactsProcessed++;
                     console.log(`✓ Synced contact: ${contact.First_Name} ${contact.Last_Name} (${contact.Email})`);
+
+                    // Find all bookings for this contact
+                    const contactKey = contact.Email?.toLowerCase() || `phone:${contact.Phone}`;
+                    const contactBookings = allBookings.filter(booking => {
+                        const bookingKey = booking.buyer.email?.toLowerCase() || `phone:${booking.buyer.phone}`;
+                        return bookingKey === contactKey;
+                    });
+
+                    // Sync all bookings for this contact
+                    for (const booking of contactBookings) {
+                        // Skip bookings without required fields
+                        if (!booking.reference || !booking.product_name) {
+                            console.log(`Skipping booking ${booking.id} - missing required fields`);
+                            bookingsFailed++;
+                            continue;
+                        }
+                        
+                        try {
+                            const normalizedBooking = this.normalizeBooking(booking, zohoContact.id!);
+                            const zohoBooking = await this.zohoService.upsertBooking(normalizedBooking);
+                            
+                            // Track in idempotency map
+                            await this.idService.saveMapping(
+                                booking.reference,
+                                'wetravel_booking',
+                                zohoBooking.id!,
+                                'booking'
+                            );
+                            
+                            bookingsProcessed++;
+                            console.log(`✓ Synced booking: ${booking.reference} for contact ${contact.Email}`);
+                        } catch (error) {
+                            console.error(`Failed to sync booking ${booking.reference}:`, error);
+                            bookingsFailed++;
+                        }
+                    }
                 } catch (error) {
                     console.error('Failed to upsert contact:', error);
-                    failed++;
+                    contactsFailed++;
                 }
             }
 
@@ -148,8 +268,10 @@ export class WeTravelHistoricContactSyncService {
                 where: { id: job.id },
                 data: {
                     status: 'completed',
-                    contacts_processed: processed,
-                    contacts_failed: failed,
+                    contacts_processed: contactsProcessed,
+                    contacts_failed: contactsFailed,
+                    bookings_processed: bookingsProcessed,
+                    bookings_failed: bookingsFailed,
                     completed_at: new Date()
                 }
             });
@@ -157,8 +279,10 @@ export class WeTravelHistoricContactSyncService {
             return {
                 id: updatedJob.id,
                 status: 'completed',
-                contactsProcessed: processed,
-                contactsFailed: failed,
+                contactsProcessed,
+                contactsFailed,
+                bookingsProcessed,
+                bookingsFailed,
                 startedAt: updatedJob.started_at,
                 completedAt: updatedJob.completed_at ?? undefined
             };
@@ -192,6 +316,8 @@ export class WeTravelHistoricContactSyncService {
             status: job.status as 'completed' | 'in_progress' | 'failed',
             contactsProcessed: job.contacts_processed,
             contactsFailed: job.contacts_failed,
+            bookingsProcessed: job.bookings_processed,
+            bookingsFailed: job.bookings_failed,
             startedAt: job.started_at,
             completedAt: job.completed_at ?? undefined,
             errorMessage: job.error_message ?? undefined
@@ -254,6 +380,20 @@ export class WeTravelHistoricContactSyncService {
             Email: buyer.email || null,
             Phone: buyer.phone || null,
             Country: buyer.country || null
+        };
+    }
+
+    private normalizeBooking(booking: WeTravelBooking, contactId: string): Omit<ZohoVentrataBooking, 'id'> {
+        // Extract date from ISO timestamp or use as-is
+        const bookingDate = booking.created_at?.split('T')[0] || '';
+        
+        return {
+            Booking_Ref: booking.reference || '',
+            Name: booking.product_name || '',
+            Contact_Id: contactId,
+            Product: booking.product_name || '',
+            Travel_Date: booking.travel_date || '',
+            Booking_Date: bookingDate
         };
     }
 }

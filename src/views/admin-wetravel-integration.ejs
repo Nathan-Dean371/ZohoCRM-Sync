@@ -389,6 +389,14 @@
                         <span class="sync-stat-value" id="syncFailed">0</span>
                     </div>
                     <div class="sync-stat">
+                        <span class="sync-stat-label">Bookings Processed:</span>
+                        <span class="sync-stat-value" id="syncBookingsProcessed">0</span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Bookings Failed:</span>
+                        <span class="sync-stat-value" id="syncBookingsFailed">0</span>
+                    </div>
+                    <div class="sync-stat">
                         <span class="sync-stat-label">Started At:</span>
                         <span class="sync-stat-value" id="syncStartedAt">-</span>
                     </div>
@@ -507,6 +515,8 @@
                     if (data.status) document.getElementById('syncStatus').textContent = data.status;
                     if (data.contactsProcessed !== undefined) document.getElementById('syncProcessed').textContent = data.contactsProcessed;
                     if (data.contactsFailed !== undefined) document.getElementById('syncFailed').textContent = data.contactsFailed;
+                    if (data.bookingsProcessed !== undefined) document.getElementById('syncBookingsProcessed').textContent = data.bookingsProcessed;
+                    if (data.bookingsFailed !== undefined) document.getElementById('syncBookingsFailed').textContent = data.bookingsFailed;
                     if (data.startedAt) document.getElementById('syncStartedAt').textContent = new Date(data.startedAt).toLocaleString();
                     if (data.completedAt) document.getElementById('syncCompletedAt').textContent = new Date(data.completedAt).toLocaleString();
                 }
