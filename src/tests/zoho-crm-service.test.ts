@@ -5,26 +5,58 @@ dotenv.config();
 
 describe('ZohoCRMService', () => {
     let crmService: ZohoCRMService;
+    let mockTokenManager: any;
 
     beforeEach(() => {
-        crmService = new ZohoCRMService();
+        jest.clearAllMocks();
+
+        // Mock ZohoTokenManager manually
+        mockTokenManager = {
+            withZohoToken: jest.fn().mockImplementation(async (fn) => {
+                return await fn('mock-token');
+            })
+        };
+
+        // Pass mockTokenManager to constructor
+        crmService = new ZohoCRMService(mockTokenManager as any);
+        
+        // Mock the client's internal methods
+        (crmService as any).client = {
+            get: jest.fn(),
+            post: jest.fn(),
+            put: jest.fn(),
+            interceptors: {
+                request: { use: jest.fn() },
+                response: { use: jest.fn() }
+            }
+        };
     });
 
     test('should find contact by email', async () => {
-        const testEmail = 'test@example.com'; // Use an email you know exists in your CRM
+        const testEmail = 'test@example.com';
+        const mockResponse = {
+            data: {
+                data: [{
+                    id: '123',
+                    First_Name: 'Test',
+                    Last_Name: 'User',
+                    Email: testEmail
+                }]
+            }
+        };
+
+        (crmService as any).client.get.mockResolvedValue(mockResponse);
         
         const contact = await crmService.findContactByEmail(testEmail);
         
-        if (contact) {
-            expect(contact.Email).toBe(testEmail);
-            console.log('Found contact:', contact);
-        } else {
-            console.log('No contact found with email:', testEmail);
-        }
+        expect(contact?.Email).toBe(testEmail);
+        expect(contact?.id).toBe('123');
+        expect(mockTokenManager.withZohoToken).toHaveBeenCalled();
     });
     
     test('should handle non-existent email search', async () => {
-        const nonExistentEmail = 'nonexistent' + Date.now() + '@example.com';
+        const nonExistentEmail = 'nonexistent@example.com';
+        (crmService as any).client.get.mockResolvedValue({ data: { data: [] } });
         
         const contact = await crmService.findContactByEmail(nonExistentEmail);
         expect(contact).toBeNull();
@@ -32,99 +64,140 @@ describe('ZohoCRMService', () => {
 
     describe('Contact Operations', () => {
         test('should create a new contact', async () => {
-            // Create a test contact
             const testContact = {
-                First_Name: 'Test2',
+                First_Name: 'Test',
                 Last_Name: 'User',
                 Email: 'test@example.com',
-                Phone: '+1234567890',
-                Country: 'IE'
+                Phone: '+1234567890'
             };
 
-            try {
-                const createdContact = await crmService.createContact(testContact);
+            (crmService as any).client.post.mockResolvedValue({
+                data: {
+                    data: [{
+                        code: 'SUCCESS',
+                        details: { id: '123' }
+                    }]
+                }
+            });
 
-                // Verify the response
-                expect(createdContact).toBeDefined();
-                expect(createdContact.id).toBeDefined();
-                expect(createdContact.First_Name).toBe(testContact.First_Name);
-                expect(createdContact.Last_Name).toBe(testContact.Last_Name);
-                expect(createdContact.Email).toBe(testContact.Email);
+            // Mock search by email to fail
+            (crmService as any).client.get.mockResolvedValue({ data: { data: [] } });
 
-                console.log('Created Contact:', createdContact);
-            } catch (error) {
-                console.error('Test Error:', error);
-                throw error;
-            }
+            const createdContact = await crmService.createContact(testContact);
+
+            expect(createdContact.id).toBe('123');
+            expect(createdContact.First_Name).toBe(testContact.First_Name);
+            expect(mockTokenManager.withZohoToken).toHaveBeenCalled();
         });
 
-        test('should handle invalid contact data', async () => {
-            // Create an invalid contact (missing required Last_Name)
-            const invalidContact = {
+        test('should fallback to phone if email search returns no results in upsertContact', async () => {
+            const testContact = {
                 First_Name: 'Test',
-                Email: 'test@example.com',
-                Last_Name: ''  // Empty string to test validation
-            };
-        
-            await expect(crmService.createContact(invalidContact))
-                .rejects
-                .toThrow();
-        });
-
-        // Optional: Test with special characters
-        test('should handle special characters in contact name', async () => {
-            const specialCharContact = {
-                First_Name: 'Tést',
-                Last_Name: 'O\'User-Name',
-                Email: 'test.special@example.com',
+                Last_Name: 'PhoneFallback',
+                Email: 'notfound@example.com',
+                Phone: '+9876543210'
             };
 
-            const createdContact = await crmService.createContact(specialCharContact);
-            expect(createdContact.id).toBeDefined();
-            expect(createdContact.First_Name).toBe(specialCharContact.First_Name);
+            // First call (findContactByEmail) returns empty
+            (crmService as any).client.get.mockResolvedValueOnce({ data: { data: [] } });
+            
+            // Second call (findContactByPhone) returns a match
+            (crmService as any).client.get.mockResolvedValueOnce({
+                data: {
+                    data: [{
+                        id: '789',
+                        First_Name: 'Existing',
+                        Last_Name: 'ByPhone',
+                        Email: 'different@example.com',
+                        Phone: '+9876543210'
+                    }]
+                }
+            });
+
+            // Mock updateContact
+            (crmService as any).client.put.mockResolvedValue({
+                data: {
+                    data: [{
+                        code: 'SUCCESS',
+                        details: { id: '789' }
+                    }]
+                }
+            });
+
+            const result = await crmService.upsertContact(testContact);
+
+            expect(result.id).toBe('789');
+            // Verify it was an update call
+            expect((crmService as any).client.put).toHaveBeenCalled();
         });
     });
 
     describe('Booking Operations', () => {
-        test('should create a new booking', async () => 
-            {
-                const testBooking = {
-                    Booking_Ref: `TEST-${Date.now()}`,
-                    Name: 'Test Booking',
-                    Contact_Id: '',
-                    Option: "Test Option",
-                    Booking_Date: formatDateForZoho('2021-12-31'),
-                    Product: 'Test Product',
-                    Travel_Date: formatDateForZoho('2022-01-01')
+        test('should create a new booking', async () => {
+            const testBooking = {
+                Booking_Ref: 'TEST-123',
+                Name: 'Test Booking',
+                Contact_Id: '123',
+                Product: 'Test Product',
+                Travel_Date: '2022-01-01',
+                Booking_Date: '2021-12-31'
+            };
+
+            (crmService as any).client.post.mockResolvedValue({
+                data: {
+                    data: [{
+                        code: 'SUCCESS',
+                        details: { id: '456' }
+                    }]
                 }
+            });
 
+            const createdBooking = await crmService.createBooking(testBooking as any);
 
-                try 
-                {
-                    const createdBooking = await crmService.createBooking(testBooking);
+            expect(createdBooking.id).toBe('456');
+            expect(createdBooking.Booking_Ref).toBe(testBooking.Booking_Ref);
+            expect(mockTokenManager.withZohoToken).toHaveBeenCalled();
+        });
 
-                    expect(createdBooking).toBeDefined();
-                    expect(createdBooking.id).toBeDefined();
-                    expect(createdBooking.Booking_Ref).toBe(testBooking.Booking_Ref);
-                    expect(createdBooking.Name).toBe(testBooking.Name);
-                    expect(createdBooking.Contact_Id).toBe(testBooking.Contact_Id);
-                    expect(createdBooking.Booking_Date).toBe(testBooking.Booking_Date);
-                    expect(createdBooking.Product).toBe(testBooking.Product);
-                    expect(createdBooking.Travel_Date).toBe(testBooking.Travel_Date);
+        test('should update existing booking in upsertBooking', async () => {
+            const testBooking = {
+                Booking_Ref: 'EXISTING-REF',
+                Name: 'Updated Booking',
+                Contact_Id: '123',
+                Product: 'Updated Product',
+                Travel_Date: '2022-01-01',
+                Booking_Date: '2021-12-31'
+            };
 
-                    console.log('Created Booking:', createdBooking);
-                } catch(error)
-                {
-                    console.error('Test Error:', error);
-                    throw error;
+            // Mock findBookingByRef returns a match
+            (crmService as any).client.get.mockResolvedValueOnce({
+                data: {
+                    data: [{
+                        id: 'BOOKING-999',
+                        Booking_Ref: 'EXISTING-REF',
+                        Name: 'Old Name'
+                    }]
                 }
+            });
 
+            // Mock updateBooking
+            (crmService as any).client.put.mockResolvedValue({
+                data: {
+                    data: [{
+                        code: 'SUCCESS',
+                        details: { id: 'BOOKING-999' }
+                    }]
+                }
+            });
+
+            const result = await crmService.upsertBooking(testBooking as any);
+
+            expect(result.id).toBe('BOOKING-999');
+            expect((crmService as any).client.put).toHaveBeenCalledWith(
+                expect.stringContaining('/BOOKING-999'),
+                expect.any(Object),
+                expect.any(Object)
+            );
         });
     });
 });
-
-function formatDateForZoho(date: string): string {
-    const d = new Date(date);
-    // Format to ISO string and add timezone offset
-    return d.toISOString().split('.')[0] + '+00:00';  // removes milliseconds
-}

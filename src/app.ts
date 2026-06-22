@@ -1,16 +1,16 @@
+import 'dotenv/config';
 import express, { Express, Request, Response, NextFunction } from 'express';
 import webhookRoutes from './routes/webhook.routes';
 import apiKeyRoute from './routes/api-key.routes';
 import loginRoute from './routes/login-auth.routes';
 import tunnelRoutes from './routes/tunnels.routes';
-import companyRoute from './routes/inviteCompany.routes';
 import inviteUserRoute from './routes/inviteUser.routes';
-import updateCompanyRoute from './routes/updateCompany.route';
 import updateUserRoute from './routes/updateUser.route';
 import createTunnelRoute from './routes/createTunnel.route';
 import bitrixRoutes from './routes/bitrixHandler.routes';
 import acceptInviteRoute from './routes/join.routes';
 import { authMiddleware } from './middleware/auth';
+import { errorHandler } from './middleware/errorHandler';
 import prismaClientInstance, { connectToDatabase } from './services/database/databaseConnector';
 import path from 'path';
 import { userAuthMiddleware } from './middleware/user-auth';
@@ -23,19 +23,15 @@ import { User } from './types/users';
 import { create } from 'domain';
 import managerRoutes from './routes/manager.routes';
 import managerTunnelsRouter from './routes/managerTunnels.routes';
+import wetravelIntegrationRoutes from './routes/wetravel-integration.routes';
+import wetravelSyncRoutes from './routes/wetravel-sync.routes';
+import ZohoAuthService from './services/zoho/zoho-auth';
+import { integrationDataService } from './services/integrations/integration-config-service';
 
 declare module "express-session"
 {
   interface SessionData
   {
-    inviteCompany : {
-      companyName : string
-    }
-    invitedManager : {
-      email : string,
-      firstName : string,
-      lastName : string
-    }
     invitedUser : {
       email : string,
       firstName : string,
@@ -73,6 +69,9 @@ connectToDatabase();
 //#region Routes
 // Mount the API key check route
 app.use('/api/', apiKeyRoute)
+app.use('/api', webhookRoutes);
+app.use('/admin/api/wetravel', wetravelSyncRoutes);
+app.use('/', wetravelIntegrationRoutes);
 app.post('/api/:id/webhook', (req: Request, res: Response) =>
 {
   console.log("Received webhook");
@@ -86,9 +85,9 @@ AddManagerRoutes(app);
 // Routes will be added here
 // app.use('/api/v1', routes);
 app.use('/', loginRoute);
-app.use('/', companyRoute);
+// app.use('/', companyRoute);
 app.use('/', inviteUserRoute);
-app.use('/', updateCompanyRoute);
+// app.use('/', updateCompanyRoute);
 app.use('/', updateUserRoute); // Add this line
 app.use('/', createTunnelRoute);
 app.use('/', bitrixRoutes);
@@ -102,11 +101,8 @@ app.post('/logout', (req: Request, res: Response) => {
   res.redirect('/');
 });
 
-// Basic error handling middleware
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    console.error(err.stack);
-    res.status(500).send('Something broke!');
-  });
+// Use the robust error handling middleware
+app.use(errorHandler);
 
 // Basic health check endpoint
 app.get('/health', (req: Request, res: Response) => {
@@ -150,6 +146,10 @@ function EnableMiddleware(app: express.Express)
 // Apply auth middleware to all API routes
 function EnableAuthMiddleware(app: express.Express)
 {
+  // Mount the webhook route BEFORE auth middleware to exempt it from X-API-Key requirement
+  // It has its own X-Webhook-Secret validation in the controller
+  app.use('/api', webhookRoutes);
+  
   app.use('/api', authMiddleware);
   app.use('/', userAuthMiddleware);
 }
@@ -181,22 +181,12 @@ function AddAdminRoutes(app: express.Express)
   });
 
   app.get('/admin/invite/company', (req: Request, res: Response) => {
-    res.render('invite-company', { title: 'Invite Company', user: req.user });  
-  });
+  res.status(404).render('error', { title: 'Not Found', message: 'Company invite UI removed', user: req.user });
+});
 
-  app.get('/admin/invite/company/success' , (req: Request, res: Response) => 
-    {
-      if(req.session.inviteCompany)
-      {
-        let invitedManager = req.session.invitedManager;
-        res.render('invite-company-success', { title: 'Invite Company Success', user: req.user, companyName: req.session?.inviteCompany.companyName, invitedManager});
-        //Clear the session data
-        req.session.inviteCompany = undefined;
-        req.session.invitedManager = undefined;
-        
-      }
-    
-  });
+app.get('/admin/invite/company/success' , (req: Request, res: Response) => {
+  res.status(404).render('error', { title: 'Not Found', message: 'Company invite UI removed', user: req.user });
+});
 
   app.get('/admin/invite/user/success' , (req: Request, res: Response) =>
   {
@@ -309,6 +299,160 @@ app.delete('/admin/dashboard/tunnels/:id', async (req: Request, res: Response) =
         });
     }
 });
+
+  app.get('/admin/dashboard/integrations/zoho', async (req: Request, res: Response) => {
+    try {
+        const isConnected = await integrationDataService.hasZohoRefreshToken();
+        res.render('admin-zoho-integration', { 
+            title: 'Zoho Integration', 
+            user: req.user,
+            isConnected,
+            error: req.query.error,
+            success: req.query.success
+        });
+    } catch (error) {
+        console.error('Error loading Zoho integration status:', error);
+        res.status(500).render('error', { title: 'Error', message: 'Error loading integration status', user: req.user });
+    }
+  });
+
+      app.get('/admin/dashboard/integrations/wetravel', async (req: Request, res: Response) => {
+      try {
+        const status = await integrationDataService.getWeTravelStatus();
+        const credentials = await integrationDataService.getWeTravelCredentials();
+        const rolloutGuard = await integrationDataService.getWeTravelRolloutGuard();
+
+        const statusLabel = status.status === 'connected'
+          ? 'Connected'
+          : status.status === 'invalid_key'
+            ? 'Needs attention'
+            : status.status === 'no_pro'
+              ? 'WeTravel Pro required'
+              : status.status === 'not_main_account'
+                ? 'Main account required'
+                : status.status === 'permission_denied'
+                  ? 'Permission denied'
+                  : 'Not connected';
+
+        const statusTone = status.status === 'connected'
+          ? 'success'
+          : status.status
+            ? 'warning'
+            : 'danger';
+
+        const webhookUrl = credentials 
+          ? `${process.env.APP_BASE_URL || 'http://localhost:3000'}/api/webhook/wetravel`
+          : null;
+
+        res.render('admin-wetravel-integration', {
+          title: 'WeTravel Integration',
+          user: req.user,
+          companyId: (req.user as any)?.company_id || null,
+          status,
+          statusLabel,
+          statusTone,
+          credentialsPresent: !!credentials,
+          rolloutGuard,
+          webhookUrl,
+          error: req.query.error,
+          success: req.query.success
+        });
+      } catch (error) {
+        console.error('Error loading WeTravel integration status:', error);
+        res.status(500).render('error', { title: 'Error', message: 'Error loading WeTravel integration status', user: req.user });
+      }
+      });
+
+  app.get('/admin/dashboard/integrations/zoho/auth', (req: Request, res: Response) => {
+    const zohoAuth = new ZohoAuthService();
+    res.redirect(zohoAuth.getAuthorizationUrl());
+  });
+
+  app.get('/admin/dashboard/integrations/zoho/callback', async (req: Request, res: Response) => {
+    const { code, error } = req.query;
+
+    if (error) {
+        return res.redirect(`/admin/dashboard/integrations/zoho?error=${error}`);
+    }
+
+    if (!code) {
+        return res.redirect('/admin/dashboard/integrations/zoho?error=No code provided');
+    }
+
+    try {
+        const zohoAuth = new ZohoAuthService();
+        const tokens = await zohoAuth.exchangeCodeForTokens(code as string);
+
+        // Store the refresh token and metadata
+        await integrationDataService.saveIntegrationConfig({
+            zoho_refresh_token: tokens.refresh_token,
+            access_token: tokens.access_token,
+            expires_at: new Date(tokens.expires_at!),
+            token_metadata: {
+                api_domain: tokens.api_domain,
+                token_type: tokens.token_type
+            }
+        });
+
+        res.redirect('/admin/dashboard/integrations/zoho?success=true');
+    } catch (err) {
+        console.error('Error during Zoho OAuth callback:', err);
+        res.redirect(`/admin/dashboard/integrations/zoho?error=${encodeURIComponent((err as Error).message)}`);
+    }
+  });
+
+  app.get('/admin/dashboard/webhook-logs', async (req: Request, res: Response) => {
+    try {
+        const { status } = req.query;
+        const where = status ? { status: status as string } : {};
+        
+        const logs = await integrationDataService.listWebhookLogs({
+            where,
+            orderBy: { created_at: 'desc' },
+            take: 100 // Limit for now
+        });
+
+        res.render('admin-webhook-logs', { 
+            title: 'Webhook Logs & DLQ', 
+            user: req.user, 
+            logs,
+            statusFilter: status || ''
+        });
+    } catch (error) {
+        console.error('Error fetching webhook logs:', error);
+        res.status(500).render('error', { title: 'Error', message: 'Error loading webhook logs', user: req.user });
+    }
+  });
+
+  app.post('/admin/dashboard/webhook-logs/:id/requeue', async (req: Request, res: Response) => {
+    try {
+        const log = await integrationDataService.getWebhookLog(req.params.id);
+        if (!log) {
+            res.status(404).json({ success: false, message: 'Log not found' });
+            return;
+        }
+
+        // Reset log status and attempts
+        await integrationDataService.updateWebhookLog(log.id, {
+            status: 'RECEIVED',
+            attempts: 0,
+            last_error: null,
+            dlq_ref: null
+        });
+
+        // Enqueue the job again
+        const { ventrataWebhookQueue } = await import('./services/queue');
+        await ventrataWebhookQueue.add('process-ventrata-webhook', {
+            payload: log.payload,
+            logId: log.id
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error requeueing job:', error);
+        res.status(500).json({ success: false, message: 'Error requeueing job' });
+    }
+  });
   //#endregion
 }
 

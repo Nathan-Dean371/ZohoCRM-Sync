@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { getUserDetails } from '../services/database/databaseConnector';
 import { User } from '../types/users';
 import { user_role } from '../types/userRoles';
+import { AppError } from './errorHandler';
 
 
 const checkForAuthToken = async (req : Request, res : Response, next : NextFunction) => {
@@ -37,7 +38,9 @@ const checkForAuthToken = async (req : Request, res : Response, next : NextFunct
         }
         else
         {
-            console.log('Unhandeled error: ', error);
+            console.log('JWT Error: ', error);
+            res.clearCookie('auth-token');
+            next(new AppError(401, 'Unauthorized'));
         }
     }
 };
