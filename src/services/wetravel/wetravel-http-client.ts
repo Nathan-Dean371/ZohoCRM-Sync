@@ -65,18 +65,35 @@ export class WeTravelHttpClient implements WeTravelApiClient {
         return trips;
     }
 
-    async fetchLeads(): Promise<any[]> {
+    async fetchLeads(options: {
+        trip_uuids?: string[];
+        is_booked?: boolean;
+        page?: number;
+        per_page?: 25 | 50 | 100;
+    } = {}): Promise<{ leads: any[]; pagination: any }> {
         const token = await this.tokenManager.getAccessToken();
         const url = `${this.apiBaseUrl}/lead`;
         
+        // Default pagination
+        const body = {
+            page: options.page || 1,
+            per_page: options.per_page || 100,
+            sort_by: 'recent_requested_at',
+            sort_dir: 'desc',
+            ...options
+        };
+        
         console.log('Fetching WeTravel leads from:', url);
+        console.log('Request body:', JSON.stringify(body));
         
         const response = await fetch(url, {
-            method: 'GET',
+            method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'Accept': 'application/json'
-            }
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
         });
 
         console.log('WeTravel leads response:', response.status, response.statusText);
@@ -88,9 +105,9 @@ export class WeTravelHttpClient implements WeTravelApiClient {
         }
 
         const rawResponse = await response.json();
-        console.log(`Fetched raw leads response (first 2000 chars):`, JSON.stringify(rawResponse).substring(0, 2000));
+        console.log(`Fetched raw leads response structure:`, Object.keys(rawResponse));
         
-        // WeTravel API returns a direct array
+        // Parse response - WeTravel returns { leads: [...], pagination: {...} }
         let leads: any[];
         if (Array.isArray(rawResponse)) {
             leads = rawResponse;
@@ -102,8 +119,10 @@ export class WeTravelHttpClient implements WeTravelApiClient {
             leads = [];
         }
         
-        console.log(`Parsed ${leads.length} leads from response`);
-        return leads;
+        const pagination = rawResponse.pagination || {};
+        
+        console.log(`Parsed ${leads.length} leads from response, total: ${pagination.total_count || 'unknown'}`);
+        return { leads, pagination };
     }
 
     async fetchBookings(tripUuid: string): Promise<WeTravelBooking[]> {
@@ -116,7 +135,7 @@ export class WeTravelHttpClient implements WeTravelApiClient {
         });
 
         // Convert leads to booking format
-        const bookings: WeTravelBooking[] = response.leads.map(lead => ({
+        const bookings: WeTravelBooking[] = response.leads.map((lead: any) => ({
             id: String(lead.id),
             reference: lead.id ? String(lead.id) : undefined,
             product_name: lead.trip?.title,

@@ -30,7 +30,12 @@ export interface WeTravelBooking {
 export interface WeTravelApiClient {
     fetchTrips(): Promise<WeTravelTrip[]>;
     fetchBookings(tripUuid: string): Promise<WeTravelBooking[]>;
-    fetchLeads?(): Promise<any[]>; // Optional for backward compatibility
+    fetchLeads?(options?: {
+        trip_uuids?: string[];
+        is_booked?: boolean;
+        page?: number;
+        per_page?: 25 | 50 | 100;
+    }): Promise<{ leads: any[]; pagination: any }>;
 }
 
 export interface ImportStatus {
@@ -152,9 +157,7 @@ export class WeTravelHistoricContactSyncService {
                         if (zohoBooking.id) {
                             await this.idService.saveMapping(
                                 booking.reference,
-                                'wetravel_booking',
-                                zohoBooking.id,
-                                'booking'
+                                zohoBooking.id
                             );
                         }
                         
@@ -245,9 +248,7 @@ export class WeTravelHistoricContactSyncService {
                             // Track in idempotency map
                             await this.idService.saveMapping(
                                 booking.reference,
-                                'wetravel_booking',
-                                zohoBooking.id!,
-                                'booking'
+                                zohoBooking.id!
                             );
                             
                             bookingsProcessed++;
