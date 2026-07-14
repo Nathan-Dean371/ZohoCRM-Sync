@@ -22,7 +22,6 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
 
     describe('fetchTrips', () => {
         test('calls the correct draft_trips endpoint', async () => {
-            // TRACER BULLET: Verify we're calling the right endpoint per WeTravel API docs
             (global.fetch as jest.Mock).mockResolvedValueOnce({
                 ok: true,
                 status: 200,
@@ -31,7 +30,6 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
 
             await httpClient.fetchTrips();
 
-            // WeTravel API uses /v2/draft_trips for listing trips
             expect(global.fetch).toHaveBeenCalledWith(
                 'https://api.wetravel.com/v2/draft_trips',
                 expect.objectContaining({
@@ -45,8 +43,6 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
         });
 
         test('normalizes API response with id and title fields to uuid and name', async () => {
-            // RED: WeTravel API returns trips with 'id' and 'title' fields,
-            // but our interface expects 'uuid' and 'name'
             const apiResponse = [
                 {
                     id: 998076,
@@ -81,11 +77,34 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
                 name: "10 Day Grand Tour"
             });
         });
+
+        test('prefers API uuid over numeric id when both are present', async () => {
+            const apiResponse = [
+                {
+                    id: 77236795,
+                    uuid: 'trip-77236795-uuid',
+                    title: 'Tellus360 Ireland Trip - May 2022'
+                }
+            ];
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => apiResponse
+            });
+
+            const trips = await httpClient.fetchTrips();
+
+            expect(trips).toHaveLength(1);
+            expect(trips[0]).toMatchObject({
+                uuid: 'trip-77236795-uuid',
+                name: 'Tellus360 Ireland Trip - May 2022'
+            });
+        });
     });
 
-    describe('fetchBookings', () => {
+    describe('fetchTripBookings', () => {
         test('handles 404 error when trips endpoint does not exist', async () => {
-            // RED: /trips/{id}/bookings returns 404, need to find correct endpoint
             (global.fetch as jest.Mock).mockResolvedValueOnce({
                 ok: false,
                 status: 404,
@@ -93,21 +112,20 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
                 text: async () => 'Not Found'
             });
 
-            await expect(httpClient.fetchBookings('998076'))
+            await expect(httpClient.fetchTripBookings('998076'))
                 .rejects
                 .toThrow('WeTravel API error: 404 Not Found');
         });
 
-        test('fetches bookings using leads endpoint with is_booked filter', async () => {
-            // RED: Should use /lead endpoint with is_booked=true and trip_uuids filter
-            // instead of /trips/{id}/bookings which doesn't exist
+        test('fetches bookings from trip bookings endpoint', async () => {
             const apiResponse = {
-                leads: [
+                bookings: [
                     {
                         id: 123,
-                        trip_uuid: "54648412",
-                        email: "customer@example.com",
-                        is_booked: true,
+                        reference: 'WT-123',
+                        buyer: {
+                            email: "customer@example.com"
+                        },
                         trip: {
                             title: "5 Day Ireland West & South"
                         },
@@ -115,9 +133,10 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
                     },
                     {
                         id: 124,
-                        trip_uuid: "54648412",
-                        email: "another@example.com",
-                        is_booked: true,
+                        reference: 'WT-124',
+                        buyer: {
+                            email: "another@example.com"
+                        },
                         trip: {
                             title: "5 Day Ireland West & South"
                         },
@@ -137,18 +156,17 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
                 json: async () => apiResponse
             });
 
-            const bookings = await httpClient.fetchBookings('54648412');
+            const bookings = await httpClient.fetchTripBookings('54648412');
 
-            // Should call /lead endpoint with correct filters
+            // Should call /bookings/trips/{tripId}/bookings endpoint with query pagination
             expect(global.fetch).toHaveBeenCalledWith(
-                'https://api.wetravel.com/v2/lead',
+                'https://api.wetravel.com/v2/bookings/trips/54648412/bookings?page=1&per_page=100',
                 expect.objectContaining({
-                    method: 'POST',
+                    method: 'GET',
                     headers: expect.objectContaining({
                         'Authorization': 'Bearer test-access-token',
-                        'Content-Type': 'application/json'
-                    }),
-                    body: expect.stringContaining('"trip_uuids":["54648412"]')
+                        'Accept': 'application/json'
+                    })
                 })
             );
 
@@ -160,6 +178,114 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
                     email: 'customer@example.com'
                 }
             });
+        });
+
+        test('normalizes numeric booking id into reference when explicit reference is missing', async () => {
+            const apiResponse = {
+                bookings: [
+                    {
+                        id: 2775611458,
+                        buyer: {
+                            email: 'customer@example.com'
+                        }
+                    }
+                ],
+                pagination: {
+                    page: 1,
+                    per_page: 100,
+                    total_count: 1
+                }
+            };
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => apiResponse
+            });
+
+            const bookings = await httpClient.fetchTripBookings('54648412');
+
+            expect(bookings).toHaveLength(1);
+            expect(bookings[0].id).toBe('2775611458');
+            expect(bookings[0].reference).toBe('2775611458');
+            expect(bookings[0].product_name).toBe('WeTravel Booking');
+        });
+
+        test('fetches buyer booking detail endpoint for participant enrichment', async () => {
+            const apiResponse = {
+                buyer_id: 2651160,
+                participants: [
+                    {
+                        id: '2783882909382090752',
+                        email: 'damianpmarshall@gmail.com',
+                        first_name: 'Damian',
+                        last_name: 'Marshall'
+                    }
+                ]
+            };
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => apiResponse
+            });
+
+            const details = await httpClient.fetchTripBuyerBookingDetails('8794029971', '2651160');
+
+            expect(global.fetch).toHaveBeenCalledWith(
+                'https://api.wetravel.com/v2/bookings/trips/8794029971/bookings/2651160',
+                expect.objectContaining({
+                    method: 'GET',
+                    headers: expect.objectContaining({
+                        'Authorization': 'Bearer test-access-token',
+                        'Accept': 'application/json'
+                    })
+                })
+            );
+            expect(details).toMatchObject(apiResponse);
+        });
+
+        test('pulls booking product name from nested order option metadata and preserves nested buyer id', async () => {
+            const apiResponse = {
+                bookings: [
+                    {
+                        id: '2768666542781505536',
+                        trip: {
+                            uuid: '8794029971'
+                        },
+                        buyer: {
+                            id: 2651160,
+                            email: 'wpmwpm1@hotmail.com'
+                        },
+                        order: {
+                            options: [
+                                {
+                                    name: 'Family Room'
+                                }
+                            ]
+                        }
+                    }
+                ],
+                pagination: {
+                    page: 1,
+                    per_page: 100,
+                    total_count: 1
+                }
+            };
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => apiResponse
+            });
+
+            const bookings = await httpClient.fetchTripBookings('8794029971');
+
+            expect(bookings).toHaveLength(1);
+            expect(bookings[0].reference).toBe('2768666542781505536');
+            expect(bookings[0].product_name).toBe('Family Room');
+            expect(bookings[0].trip_uuid).toBe('8794029971');
+            expect(bookings[0].buyer_id).toBe('2651160');
         });
     });
 });

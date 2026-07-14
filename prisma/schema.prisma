@@ -138,11 +138,15 @@ model WebhookLog {
 }
 
 model IdempotencyMap {
-  ventrata_uuid  String    @id @db.VarChar(100)
-  zoho_record_id  String    @unique(map: "idempotency_map_zoho_record_id_key") @db.VarChar(100)
-  created_at      DateTime  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime  @default(now()) @db.Timestamptz(6)
+  zoho_record_id String   @db.VarChar(100)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime @default(now()) @db.Timestamptz(6)
+  source_id      String   @db.VarChar(100)
+  source_type    String   @db.VarChar(50)
+  record_type    String   @db.VarChar(20)
 
+  @@unique([source_id, source_type])
+  @@index([zoho_record_id])
   @@map("idempotency_map")
 }
 

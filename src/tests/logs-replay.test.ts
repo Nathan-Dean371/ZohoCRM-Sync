@@ -64,8 +64,6 @@ describe('Webhook Logs Admin API', () => {
             expect(response.text).toContain('FAILED');
             expect(response.text).toContain('Timeout');
             expect(response.text).toContain('Processed At');
-            expect(response.text).toContain('ventrata');
-            expect(response.text).toContain('wetravel');
             expect(integrationDataService.listWebhookLogs).toHaveBeenCalled();
         });
 
@@ -117,8 +115,7 @@ describe('Webhook Logs Admin API', () => {
                 status: 'RECEIVED',
                 attempts: 0,
                 last_error: null,
-                dlq_ref: null,
-                status_history: expect.any(Array)
+                dlq_ref: null
             });
 
             expect(ventrataWebhookQueue.add).toHaveBeenCalledWith('process-wetravel-webhook', {

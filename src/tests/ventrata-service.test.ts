@@ -1,42 +1,34 @@
-import dotenv from 'dotenv';
+import axios from 'axios';
 import VentrataService from '../services/ventrata/ventrata-service';
 
-// Load environment variables
-dotenv.config();
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('VentrataService', () => {
     let ventrataService: VentrataService;
 
-    // Run before each test
     beforeEach(() => {
-        ventrataService = new VentrataService();
+        jest.clearAllMocks();
+        ventrataService = new VentrataService('test-api-key');
     });
 
     test('getBookings should fetch bookings for today', async () => {
-        try {
-            // Get today's date in YYYY-MM-DD format
-            const today = new Date().toISOString().split('T')[0];
-            
-            const bookings = await ventrataService.getBookings({
-                localDate: today
-            });
+        const today = '2026-07-09';
+        mockedAxios.get.mockResolvedValue({
+            data: [
+                {
+                    id: 'b-1',
+                    status: 'CONFIRMED',
+                    contact: { fullName: 'Test User' }
+                }
+            ]
+        } as any);
 
-            // Basic validation
-            expect(Array.isArray(bookings)).toBe(true);
-            
-            // If we have any bookings, verify their structure
-            if (bookings.length > 0) {
-                const firstBooking = bookings[0];
-                expect(firstBooking).toHaveProperty('id');
-                expect(firstBooking).toHaveProperty('status');
-                expect(firstBooking).toHaveProperty('contact');
-            }
+        const bookings = await ventrataService.getBookings({ localDate: today });
 
-            console.log(`Retrieved ${bookings.length} bookings for ${today}`);
-            
-        } catch (error) {
-            console.error('Test failed:', error);
-            throw error;
-        }
+        expect(Array.isArray(bookings)).toBe(true);
+        expect(bookings).toHaveLength(1);
+        expect(bookings[0]).toHaveProperty('id', 'b-1');
+        expect(mockedAxios.get).toHaveBeenCalledTimes(1);
     });
 });

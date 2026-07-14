@@ -13,6 +13,7 @@ WeTravel uses the v2 API contract by default. Admin setup and token exchange sho
 	- Bitrix (`src/services/Bitrix/`)
 - Operational setup guidance:
 	- WeTravel Zoho admin SOP ([docs/codebase/WE_TRAVEL_ZOHO_ADMIN_SOP.md](WE_TRAVEL_ZOHO_ADMIN_SOP.md))
+	- WeTravel historic sync overview ([docs/codebase/WETRAVEL_HISTORIC_SYNC_OVERVIEW.md](WETRAVEL_HISTORIC_SYNC_OVERVIEW.md))
 - Email: `nodemailer` used for sending emails (`package.json`).
 - Tunnels and webhook handling: webhook endpoints and tunnel services in `src/services/Tunnels` and `src/routes/webhook.routes.ts`.
 - Dev tooling: `ngrok` appears as a dev dependency (used for exposing local webhooks in development).

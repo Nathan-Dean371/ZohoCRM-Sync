@@ -15,6 +15,12 @@ const connection = {
 const ventrataHandler = new VentrataWebhookHandler();
 const wetravelHandler = new WeTravelWebhookHandler();
 
+console.log('\n🔧 Webhook Worker Configuration:', {
+  redisHost: connection.host,
+  redisPort: connection.port,
+  concurrency: parseInt(process.env.WORKER_CONCURRENCY || '5', 10)
+});
+
 type FailureClass = 'transient' | 'permanent';
 
 function buildFailureDiagnostics(job: Job, error: any, failureClass: FailureClass) {
@@ -163,4 +169,12 @@ webhookWorker.on('failed', async (job, err) => {
   }
 });
 
-console.log('Webhook worker started and waiting for jobs...');
+webhookWorker.on('ready', () => {
+  console.log('✅ Webhook worker connected to Redis and listening for jobs...');
+});
+
+webhookWorker.on('error', (err) => {
+  console.error('❌ Webhook worker error:', err);
+});
+
+console.log('🔧 Webhook worker module loaded...');

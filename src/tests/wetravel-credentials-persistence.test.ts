@@ -66,15 +66,32 @@ describe('WeTravel Credential Persistence - Slice 1', () => {
             },
             upsertIdempotencyMap: async (input: any) => {
                 const map = await prisma.idempotencyMap.upsert({
-                    where: { ventrata_uuid: input.ventrata_uuid },
-                    create: input,
-                    update: input
+                    where: {
+                        source_id_source_type: {
+                            source_id: input.ventrata_uuid,
+                            source_type: 'ventrata'
+                        }
+                    },
+                    create: {
+                        source_id: input.ventrata_uuid,
+                        source_type: 'ventrata',
+                        record_type: 'booking',
+                        zoho_record_id: input.zoho_record_id
+                    },
+                    update: {
+                        zoho_record_id: input.zoho_record_id
+                    }
                 });
                 return map as any;
             },
             getIdempotencyMap: async (ventrataUuid: string) => {
                 const map = await prisma.idempotencyMap.findUnique({
-                    where: { ventrata_uuid: ventrataUuid }
+                    where: {
+                        source_id_source_type: {
+                            source_id: ventrataUuid,
+                            source_type: 'ventrata'
+                        }
+                    }
                 });
                 return map as any;
             }
@@ -130,15 +147,32 @@ describe('WeTravel Credential Persistence - Slice 1', () => {
             },
             upsertIdempotencyMap: async (input: any) => {
                 const map = await prisma.idempotencyMap.upsert({
-                    where: { ventrata_uuid: input.ventrata_uuid },
-                    create: input,
-                    update: input
+                    where: {
+                        source_id_source_type: {
+                            source_id: input.ventrata_uuid,
+                            source_type: 'ventrata'
+                        }
+                    },
+                    create: {
+                        source_id: input.ventrata_uuid,
+                        source_type: 'ventrata',
+                        record_type: 'booking',
+                        zoho_record_id: input.zoho_record_id
+                    },
+                    update: {
+                        zoho_record_id: input.zoho_record_id
+                    }
                 });
                 return map as any;
             },
             getIdempotencyMap: async (ventrataUuid: string) => {
                 const map = await prisma.idempotencyMap.findUnique({
-                    where: { ventrata_uuid: ventrataUuid }
+                    where: {
+                        source_id_source_type: {
+                            source_id: ventrataUuid,
+                            source_type: 'ventrata'
+                        }
+                    }
                 });
                 return map as any;
             }
@@ -188,15 +222,32 @@ describe('WeTravel Credential Persistence - Slice 1', () => {
             },
             upsertIdempotencyMap: async (input: any) => {
                 const map = await prisma.idempotencyMap.upsert({
-                    where: { ventrata_uuid: input.ventrata_uuid },
-                    create: input,
-                    update: input
+                    where: {
+                        source_id_source_type: {
+                            source_id: input.ventrata_uuid,
+                            source_type: 'ventrata'
+                        }
+                    },
+                    create: {
+                        source_id: input.ventrata_uuid,
+                        source_type: 'ventrata',
+                        record_type: 'booking',
+                        zoho_record_id: input.zoho_record_id
+                    },
+                    update: {
+                        zoho_record_id: input.zoho_record_id
+                    }
                 });
                 return map as any;
             },
             getIdempotencyMap: async (ventrataUuid: string) => {
                 const map = await prisma.idempotencyMap.findUnique({
-                    where: { ventrata_uuid: ventrataUuid }
+                    where: {
+                        source_id_source_type: {
+                            source_id: ventrataUuid,
+                            source_type: 'ventrata'
+                        }
+                    }
                 });
                 return map as any;
             }
@@ -266,15 +317,32 @@ describe('WeTravel Credential Persistence - Slice 1', () => {
             },
             upsertIdempotencyMap: async (input: any) => {
                 const map = await prisma.idempotencyMap.upsert({
-                    where: { ventrata_uuid: input.ventrata_uuid },
-                    create: input,
-                    update: input
+                    where: {
+                        source_id_source_type: {
+                            source_id: input.ventrata_uuid,
+                            source_type: 'ventrata'
+                        }
+                    },
+                    create: {
+                        source_id: input.ventrata_uuid,
+                        source_type: 'ventrata',
+                        record_type: 'booking',
+                        zoho_record_id: input.zoho_record_id
+                    },
+                    update: {
+                        zoho_record_id: input.zoho_record_id
+                    }
                 });
                 return map as any;
             },
             getIdempotencyMap: async (ventrataUuid: string) => {
                 const map = await prisma.idempotencyMap.findUnique({
-                    where: { ventrata_uuid: ventrataUuid }
+                    where: {
+                        source_id_source_type: {
+                            source_id: ventrataUuid,
+                            source_type: 'ventrata'
+                        }
+                    }
                 });
                 return map as any;
             }

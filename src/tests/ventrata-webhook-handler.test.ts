@@ -50,10 +50,10 @@ describe('VentrataWebhookHandler', () => {
     it('should process confirmed booking and update idempotency map', async () => {
         await handler.handleWebhook(mockEvent);
 
-        expect(mockIdService.getZohoId).toHaveBeenCalledWith('booking-uuid-456');
+        expect(mockIdService.getZohoId).toHaveBeenCalledWith('booking-uuid-456', 'ventrata');
         expect(mockZohoService.upsertContact).toHaveBeenCalled();
         expect(mockZohoService.upsertBooking).toHaveBeenCalled();
-        expect(mockIdService.saveMapping).toHaveBeenCalledWith('booking-uuid-456', 'zoho-booking-789');
+        expect(mockIdService.saveMapping).toHaveBeenCalledWith('booking-uuid-456', 'zoho-booking-789', 'ventrata');
     });
 
     it('should skip non-confirmed bookings', async () => {

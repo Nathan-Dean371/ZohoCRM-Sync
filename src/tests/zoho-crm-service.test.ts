@@ -68,7 +68,8 @@ describe('ZohoCRMService', () => {
                 First_Name: 'Test',
                 Last_Name: 'User',
                 Email: 'test@example.com',
-                Phone: '+1234567890'
+                Phone: '+1234567890',
+                Mobile: '+1234567890'
             };
 
             (crmService as any).client.post.mockResolvedValue({
@@ -87,6 +88,13 @@ describe('ZohoCRMService', () => {
 
             expect(createdContact.id).toBe('123');
             expect(createdContact.First_Name).toBe(testContact.First_Name);
+            expect((crmService as any).client.post).toHaveBeenCalledWith(
+                '/Contacts',
+                expect.objectContaining({
+                    data: [expect.objectContaining({ Mobile: '+1234567890' })]
+                }),
+                expect.any(Object)
+            );
             expect(mockTokenManager.withZohoToken).toHaveBeenCalled();
         });
 
@@ -95,7 +103,8 @@ describe('ZohoCRMService', () => {
                 First_Name: 'Test',
                 Last_Name: 'PhoneFallback',
                 Email: 'notfound@example.com',
-                Phone: '+9876543210'
+                Phone: '+9876543210',
+                Mobile: '+9876543210'
             };
 
             // First call (findContactByEmail) returns empty
@@ -129,6 +138,13 @@ describe('ZohoCRMService', () => {
             expect(result.id).toBe('789');
             // Verify it was an update call
             expect((crmService as any).client.put).toHaveBeenCalled();
+            expect((crmService as any).client.put).toHaveBeenCalledWith(
+                expect.stringContaining('/Contacts/789'),
+                expect.objectContaining({
+                    data: [expect.objectContaining({ Mobile: '+9876543210' })]
+                }),
+                expect.any(Object)
+            );
         });
     });
 

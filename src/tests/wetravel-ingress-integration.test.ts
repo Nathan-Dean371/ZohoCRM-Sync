@@ -3,6 +3,7 @@ import { integrationDataService } from '../services/integrations/integration-con
 import { ventrataWebhookQueue } from '../services/queue';
 import express from 'express';
 import webhookRouter from '../routes/webhook.routes';
+import crypto from 'crypto';
 
 jest.mock('../services/integrations/integration-config-service', () => ({
     integrationDataService: {
@@ -30,6 +31,24 @@ jest.mock('../services/database/databaseConnector', () => ({
     },
     connectToDatabase: jest.fn()
 }));
+
+/**
+ * Helper to generate a valid Svix HMAC signature for testing
+ */
+function generateSvixSignature(payload: any, secret: string) {
+    const svixId = `msg_${Math.random().toString(36).substr(2, 9)}`;
+    const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+    const signedContent = `${svixId}.${svixTimestamp}.${JSON.stringify(payload)}`;
+    const signature = crypto
+        .createHmac('sha256', secret)
+        .update(signedContent)
+        .digest('base64');
+    return {
+        svixId,
+        svixTimestamp,
+        svixSignature: `v1,${signature}`
+    };
+}
 
 describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
     const webhookSecret = 'test-wetravel-secret-key';
@@ -89,9 +108,13 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 created_at: new Date()
             });
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(bookingPayload, webhookSecret);
+
             const response = await request(app)
                     .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(bookingPayload);
 
             // Step 1: Verify 200 OK response (async acknowledgment)
@@ -127,10 +150,13 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
             }
         };
 
-        it('rejects webhook with invalid secret', async () => {
+        it('rejects webhook with invalid signature', async () => {
+            const { svixId, svixTimestamp } = generateSvixSignature(payload, webhookSecret);
             const response = await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', 'not-the-secret')
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', 'v1,invalid_signature_here')
                 .send(payload);
 
             expect(response.status).toBe(401);
@@ -138,7 +164,7 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
             expect(ventrataWebhookQueue.add).not.toHaveBeenCalled();
         });
 
-        it('rejects webhook with missing X-Webhook-Secret header', async () => {
+        it('rejects webhook with missing Svix signature headers', async () => {
             const response = await request(app)
                 .post('/webhook/wetravel')
                 .send(payload);
@@ -156,9 +182,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 data: { booking: { id: 'wt_1' }, customer: { email: 'test@example.com' } }
             };
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(malformedPayload, webhookSecret);
             const response = await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(malformedPayload);
 
             expect(response.status).toBe(200);
@@ -172,9 +201,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 data: { customer: { email: 'test@example.com' } }
             };
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(malformedPayload, webhookSecret);
             const response = await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(malformedPayload);
 
             expect(response.status).toBe(200);
@@ -210,9 +242,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 status: 'RECEIVED'
             });
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(payloadWithExtra, webhookSecret);
             const response = await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(payloadWithExtra);
 
             expect(response.status).toBe(200);
@@ -240,9 +275,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 created_at: new Date()
             });
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(payload, webhookSecret);
             await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(payload);
 
             expect(integrationDataService.createWebhookLog).toHaveBeenCalledWith(
@@ -291,9 +329,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 source: 'wetravel'
             });
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(complexPayload, webhookSecret);
             await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(complexPayload);
 
             // Verify the entire payload structure is preserved
@@ -322,9 +363,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 status: 'RECEIVED'
             });
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(payload, webhookSecret);
             await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(payload);
 
             expect(ventrataWebhookQueue.add).toHaveBeenCalledWith(
@@ -353,9 +397,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 status: 'RECEIVED'
             });
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(payload, webhookSecret);
             await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(payload);
 
             expect(ventrataWebhookQueue.add).toHaveBeenCalledWith(
@@ -392,9 +439,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 status: 'RECEIVED'
             });
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(payload, webhookSecret);
             const response = await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(payload);
 
             // Ingress succeeds even if rollout guard is disabled
@@ -421,9 +471,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 new Error('Database connection failed')
             );
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(payload, webhookSecret);
             const response = await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(payload);
 
             expect([404, 500]).toContain(response.status);
@@ -450,9 +503,12 @@ describe('WeTravel Webhook Ingress - End-to-End Flow', () => {
                 new Error('Redis connection failed')
             );
 
+            const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(payload, webhookSecret);
             const response = await request(app)
                 .post('/webhook/wetravel')
-                .set('X-Webhook-Secret', webhookSecret)
+                .set('svix-id', svixId)
+                .set('svix-timestamp', svixTimestamp)
+                .set('svix-signature', svixSignature)
                 .send(payload);
 
             expect(response.status).toBe(200);

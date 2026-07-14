@@ -24,6 +24,8 @@ export interface ZohoVentrataBooking {
     Booking_Date: string;
     Product: string;
     Travel_Date: string;
+    Booking_Amount?: number;
+    Booking_Currency?: string;
 }
 
 // Interface for the specific structure Zoho returns when creating/updating records

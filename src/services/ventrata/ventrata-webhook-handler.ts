@@ -2,6 +2,7 @@ import { WebhookEvent, VentrataBooking, CleanContact, CleanBooking } from '../..
 import { ZohoContact, ZohoVentrataBooking } from '../../types/zoho';
 import ZohoCRMService from '../zoho/zoho-crm-service';
 import { idempotencyService, IdempotencyService } from '../database/idempotency-service';
+import { formatDateTimeForZoho } from '../../utils/dateFormatter';
 
 class VentrataWebhookHandler {
     private readonly zohoService: ZohoCRMService;
@@ -34,7 +35,7 @@ class VentrataWebhookHandler {
             const ventrataUuid = event.booking.uuid;
 
             // Check idempotency - has this booking already been processed successfully?
-            const existingZohoId = await this.idService.getZohoId(ventrataUuid);
+            const existingZohoId = await this.idService.getZohoId(ventrataUuid, 'ventrata');
             if (existingZohoId) {
                 console.log(`Booking ${ventrataUuid} already processed (Zoho ID: ${existingZohoId}). Updating record...`);
                 // We proceed with processing to allow updates to the record, 
@@ -81,7 +82,7 @@ class VentrataWebhookHandler {
             Name: bookingName,
             Booking_Ref: booking.uuid,
             Contact_Id: zohoContact.id,  // Link to the contact
-            Booking_Date: booking.utcConfirmedAt,
+            Booking_Date: formatDateTimeForZoho(booking.utcConfirmedAt),
             Product: bookingData.productName,
             Travel_Date: bookingData.travelDate
         });
@@ -93,7 +94,7 @@ class VentrataWebhookHandler {
 
         // Step 4: Update Idempotency Map
         if (zohoBooking.id) {
-            await this.idService.saveMapping(booking.uuid, zohoBooking.id);
+            await this.idService.saveMapping(booking.uuid, zohoBooking.id, 'ventrata');
             console.log(`Idempotency map updated for booking ${booking.uuid} -> ${zohoBooking.id}`);
         }
     }

@@ -1,32 +1,33 @@
-import dotenv from 'dotenv';
+import axios from 'axios';
 import VentrataWebhookService from '../services/ventrata/ventrata-webhook-service';
 
-dotenv.config();
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 describe('VentrataWebhookService', () => {
     let webhookService: VentrataWebhookService;
 
     beforeEach(() => {
+        jest.clearAllMocks();
+        process.env.VENTRATA_API_KEY = 'test-api-key';
         webhookService = new VentrataWebhookService();
     });
 
     test('should create a webhook', async () => {
-        try {
-            // Use a test URL - in production this would be your actual endpoint
-            const testUrl = 'https://webhook.site/your-test-id';
-            
-            const webhook = await webhookService.createWebhook(testUrl);
+        const testUrl = 'https://webhook.site/your-test-id';
+        mockedAxios.post.mockResolvedValue({
+            data: {
+                id: 'webhook-1',
+                url: testUrl,
+                event: 'booking_update'
+            }
+        } as any);
 
-            // Verify the webhook response
-            expect(webhook).toBeDefined();
-            expect(webhook.id).toBeDefined();
-            expect(webhook.url).toBe(testUrl);
-            expect(webhook.event).toBe('booking_update');
-            
-            console.log('Created Webhook:', webhook);
-        } catch (error) {
-            console.error('Test Error:', error);
-            throw error;
-        }
+        const webhook = await webhookService.createWebhook(testUrl);
+
+        expect(webhook).toBeDefined();
+        expect(webhook.id).toBe('webhook-1');
+        expect(webhook.url).toBe(testUrl);
+        expect(webhook.event).toBe('booking_update');
     });
 });
