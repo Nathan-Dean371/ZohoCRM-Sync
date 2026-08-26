@@ -129,7 +129,7 @@ function EnableMiddleware(app: express.Express) {
   app.use(express.urlencoded({ extended: true }));
   app.set('view engine', 'ejs');
   app.set('views', 'src/views');
-  app.use(express.static(path.join(__dirname, 'public')));
+  app.use(express.static(path.join(process.cwd(), 'src/public')));
   app.use(cookieParser());
   app.use((req, res, next) => {
     // Generate CSRF token if it doesn't exist
