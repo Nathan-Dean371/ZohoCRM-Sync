@@ -26,9 +26,9 @@ class VentrataWebhookHandler {
                 uuid: event.booking?.uuid
             });
 
-            // Only process booking_update events for confirmed bookings
-            if (event.webhook.event !== 'booking_update' || event.booking?.status !== 'CONFIRMED') {
-                console.log('Skipping webhook - not a confirmed booking update');
+            // Only process booking_update events with a booking payload; status is handled per-record
+            if (event.webhook.event !== 'booking_update' || !event.booking?.status) {
+                console.log('Skipping webhook - not a booking update');
                 return;
             }
 
@@ -42,7 +42,7 @@ class VentrataWebhookHandler {
                 // but the upsert logic handles the technical idempotency.
             }
 
-            await this.processConfirmedBooking(event.booking);
+            await this.processBooking(event.booking);
 
         } catch (error) {
             console.error('Error processing webhook:', error);
@@ -51,10 +51,11 @@ class VentrataWebhookHandler {
     }
 
     /**
-     * Processes a confirmed booking by creating/updating contact and booking records in Zoho
+     * Processes a booking by creating/updating contact and booking records in Zoho,
+     * mapping the Ventrata status onto the Zoho booking status fields.
      */
-    private async processConfirmedBooking(booking: VentrataBooking): Promise<void> {
-        console.log('Processing confirmed booking:', booking.uuid);
+    private async processBooking(booking: VentrataBooking): Promise<void> {
+        console.log('Processing booking:', booking.uuid, booking.status);
 
         // Step 1: Extract contact information from the booking
         const contactData = this.extractContactData(booking);
@@ -75,6 +76,7 @@ class VentrataWebhookHandler {
 
         // Step 3: Create or update the booking record in Zoho (idempotent by Booking_Ref)
         const bookingData = this.extractBookingData(booking);
+        const bookingStatus = this.mapBookingStatus(booking.status);
 
         const bookingName = booking.utcConfirmedAt + " - " +  bookingData.productName;
 
@@ -84,7 +86,9 @@ class VentrataWebhookHandler {
             Contact_Id: zohoContact.id,  // Link to the contact
             Booking_Date: formatDateTimeForZoho(booking.utcConfirmedAt),
             Product: bookingData.productName,
-            Travel_Date: formatDateTimeForZoho(bookingData.travelDate)
+            Travel_Date: formatDateTimeForZoho(bookingData.travelDate),
+            Booking_Status: bookingStatus,
+            Status: bookingStatus
         });
 
         console.log('Booking processed in Zoho:', {
@@ -96,6 +100,22 @@ class VentrataWebhookHandler {
         if (zohoBooking.id) {
             await this.idService.saveMapping(booking.uuid, zohoBooking.id, 'ventrata');
             console.log(`Idempotency map updated for booking ${booking.uuid} -> ${zohoBooking.id}`);
+        }
+    }
+
+    /**
+     * Maps a Ventrata booking status onto the Zoho Booking_Status/Status vocabulary
+     */
+    private mapBookingStatus(status: VentrataBooking['status']): string {
+        switch (status) {
+            case 'CANCELLED':
+                return 'Cancelled';
+            case 'REDEEMED':
+                return 'Redeemed';
+            case 'CONFIRMED':
+                return 'Confirmed';
+            default:
+                return String(status);
         }
     }
 

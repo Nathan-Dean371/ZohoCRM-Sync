@@ -56,7 +56,7 @@ describe('VentrataWebhookHandler', () => {
         expect(mockIdService.saveMapping).toHaveBeenCalledWith('booking-uuid-456', 'zoho-booking-789', 'ventrata');
     });
 
-    it('should skip non-confirmed bookings', async () => {
+    it('should map cancelled bookings to the Cancelled status field instead of skipping', async () => {
         const cancelledEvent = {
             ...mockEvent,
             booking: { ...mockEvent.booking, status: 'CANCELLED' }
@@ -64,8 +64,47 @@ describe('VentrataWebhookHandler', () => {
 
         await handler.handleWebhook(cancelledEvent);
 
-        expect(mockZohoService.upsertContact).not.toHaveBeenCalled();
-        expect(mockIdService.saveMapping).not.toHaveBeenCalled();
+        expect(mockZohoService.upsertContact).toHaveBeenCalled();
+        expect(mockZohoService.upsertBooking).toHaveBeenCalledWith(expect.objectContaining({
+            Booking_Status: 'Cancelled',
+            Status: 'Cancelled'
+        }));
+        expect(mockIdService.saveMapping).toHaveBeenCalled();
+    });
+
+    it('should map confirmed bookings to the Confirmed status field', async () => {
+        await handler.handleWebhook(mockEvent);
+
+        expect(mockZohoService.upsertBooking).toHaveBeenCalledWith(expect.objectContaining({
+            Booking_Status: 'Confirmed',
+            Status: 'Confirmed'
+        }));
+    });
+
+    it('should update Zoho when a repeated webhook arrives with changed fields', async () => {
+        mockIdService.getZohoId.mockResolvedValue('zoho-booking-789');
+
+        const updatedEvent = {
+            ...mockEvent,
+            booking: {
+                ...mockEvent.booking,
+                product: { internalName: 'Updated Tour Name' },
+                contact: { ...mockEvent.booking!.contact, phoneNumber: '+19998887777' }
+            }
+        } as any;
+
+        await handler.handleWebhook(mockEvent);
+        await handler.handleWebhook(updatedEvent);
+
+        expect(mockZohoService.upsertContact).toHaveBeenCalledTimes(2);
+        expect(mockZohoService.upsertBooking).toHaveBeenCalledTimes(2);
+        expect(mockZohoService.upsertContact).toHaveBeenLastCalledWith(expect.objectContaining({
+            Phone: '+19998887777'
+        }));
+        expect(mockZohoService.upsertBooking).toHaveBeenLastCalledWith(expect.objectContaining({
+            Product: 'Updated Tour Name'
+        }));
+        expect(mockIdService.saveMapping).toHaveBeenCalledWith('booking-uuid-456', 'zoho-booking-789', 'ventrata');
     });
 
     it('should skip non-booking_update events', async () => {
