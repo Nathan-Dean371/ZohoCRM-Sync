@@ -146,7 +146,7 @@ class WeTravelWebhookHandler {
       Contact_Id: zohoContact.id,
       Booking_Date: formatDateTimeForZoho(booking.utcConfirmedAt || booking.confirmedAt),
       Product: bookingData.productName,
-      Travel_Date: bookingData.travelDate,
+      Travel_Date: formatDateTimeForZoho(bookingData.travelDate),
       ...(bookingData.amount !== undefined ? { Booking_Amount: bookingData.amount } : {}),
       ...(bookingData.currency ? { Booking_Currency: bookingData.currency } : {})
     });
@@ -178,10 +178,13 @@ class WeTravelWebhookHandler {
       || lead.name 
       || `${lead.firstName || ''} ${lead.lastName || ''}`.trim();
 
+    const firstName = (lead.firstName || fullName.split(' ')[0] || '').trim();
+    const lastName = (lead.lastName || fullName.split(' ').slice(1).join(' ') || '').trim();
+
     return {
       fullName,
-      First_Name: lead.firstName || (fullName.split(' ')[0] || 'Unknown'),
-      Last_Name: lead.lastName || (fullName.split(' ').slice(1).join(' ') || 'Unknown'),
+      First_Name: firstName || '',
+      Last_Name: lastName || 'Unknown',
       email: lead.email || lead.emailAddress,
       phoneNumber: lead.phone || lead.phoneNumber,
       country: lead.country || lead.countryCode
@@ -245,9 +248,45 @@ class WeTravelWebhookHandler {
     }
 
     if (typeof value === 'string') {
-      const normalized = value.replace(/[^0-9.-]/g, '').trim();
-      if (!normalized) {
+      const trimmed = value.trim();
+      if (!trimmed) {
         return undefined;
+      }
+
+      const cleaned = trimmed.replace(/\s+/g, '').replace(/[^0-9,.-]/g, '');
+      if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === ',') {
+        return undefined;
+      }
+
+      const hasComma = cleaned.includes(',');
+      const hasDot = cleaned.includes('.');
+
+      let normalized = cleaned;
+
+      if (hasComma && hasDot) {
+        const lastComma = cleaned.lastIndexOf(',');
+        const lastDot = cleaned.lastIndexOf('.');
+        const decimalSeparator = lastComma > lastDot ? ',' : '.';
+        const thousandsSeparator = decimalSeparator === ',' ? '.' : ',';
+        normalized = cleaned
+          .replace(new RegExp(`\\${thousandsSeparator}`, 'g'), '')
+          .replace(decimalSeparator, '.');
+      } else if (hasComma) {
+        const commaParts = cleaned.split(',');
+        const lastPart = commaParts[commaParts.length - 1];
+        const looksLikeThousands = commaParts.length > 1 && commaParts.slice(0, -1).every((part) => part.length > 0 && part.length <= 3);
+
+        normalized = looksLikeThousands && lastPart.length === 3
+          ? cleaned.replace(/,/g, '')
+          : cleaned.replace(/,/g, '.');
+      } else if (hasDot) {
+        const dotParts = cleaned.split('.');
+        const lastPart = dotParts[dotParts.length - 1];
+        const looksLikeThousands = dotParts.length > 1 && dotParts.slice(0, -1).every((part) => part.length > 0 && part.length <= 3);
+
+        normalized = looksLikeThousands && lastPart.length === 3
+          ? cleaned.replace(/\./g, '')
+          : cleaned;
       }
 
       const parsed = Number(normalized);

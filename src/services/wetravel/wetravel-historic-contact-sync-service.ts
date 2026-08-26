@@ -7,9 +7,22 @@ import { formatDateTimeForZoho } from '../../utils/dateFormatter';
 
 const prisma = new PrismaClient();
 
+export interface WeTravelTripPackage {
+    id?: string | number;
+    start_date?: string;
+    end_date?: string;
+    title?: string;
+    name?: string;
+}
+
 export interface WeTravelTrip {
     uuid: string;
     name: string;
+    currency?: string;
+    start_date?: string;
+    end_date?: string;
+    departure_date?: string;
+    packages?: WeTravelTripPackage[];
 }
 
 export interface WeTravelBooking {
@@ -17,6 +30,8 @@ export interface WeTravelBooking {
     reference?: string;
     trip_uuid?: string;
     buyer_id?: string | number;
+    package_id?: string | number;
+    resolved_package_id?: string | number;
     product_name?: string;
     travel_date?: string;
     start_date?: string;
@@ -188,11 +203,19 @@ export class WeTravelHistoricContactSyncService {
                     const tripBookings = await this.fetchTripBookingsForTrip(trip.uuid);
                     console.log(`  Found ${tripBookings.length} bookings`);
                     
-                    // Enrich bookings with trip name if product_name is generic
+                    // Enrich bookings with trip name only when it is a meaningful product fallback.
                     for (const booking of tripBookings) {
-                        if (!booking.product_name || booking.product_name === 'WeTravel Booking') {
-                            booking.product_name = trip.name || trip.uuid;
+                        if (
+                            (!booking.product_name || booking.product_name === 'WeTravel Booking') &&
+                            trip.name && trip.name.trim().length > 0
+                        ) {
+                            booking.product_name = trip.name;
                             console.log(`  Enriched booking ${booking.id} with trip name: ${booking.product_name}`);
+                        }
+
+                        // The trip-bookings list endpoint does not return a currency; fall back to the trip's currency.
+                        if (!booking.currency && !booking.currency_code && trip.currency) {
+                            booking.currency = trip.currency;
                         }
                     }
                     rawBookings.push(...tripBookings);
@@ -918,15 +941,15 @@ export class WeTravelHistoricContactSyncService {
             hasDetails: !!details,
             hasParticipant: !!participant
         });
-        
-        if (currentName && !this.isGenericBookingProductName(currentName)) {
-            return currentName;
-        }
 
         const detailedName = this.extractDetailedProductName(details, participant);
         console.log('Extracted detailed product name:', { detailedName });
         if (detailedName) {
             return detailedName;
+        }
+
+        if (currentName && !this.isGenericBookingProductName(currentName)) {
+            return currentName;
         }
 
         return currentName;
@@ -1191,9 +1214,11 @@ export class WeTravelHistoricContactSyncService {
     private normalizeBooking(booking: WeTravelBooking, contactId: string): Omit<ZohoVentrataBooking, 'id'> {
         // Format datetime for Zoho CRM (expects ISO 8601 with timezone, no milliseconds)
         const bookingDate = formatDateTimeForZoho(booking.created_at);
-        const bookingAmount = this.parseAmount(
+        const rawBookingAmount = this.parseAmount(
             booking.total_amount ?? booking.paid_amount ?? booking.amount
         );
+        // WeTravel API returns monetary amounts in cents (e.g. 697000 = 6,970.00).
+        const bookingAmount = rawBookingAmount !== undefined ? rawBookingAmount / 100 : undefined;
         const bookingCurrency = (booking.currency_code || booking.currency || '').trim().toUpperCase() || undefined;
         
         console.log('Normalizing booking for Zoho:', {
@@ -1209,7 +1234,7 @@ export class WeTravelHistoricContactSyncService {
             Name: booking.product_name || '',
             Contact_Id: contactId,
             Product: booking.product_name || '',
-            Travel_Date: booking.travel_date || '',
+            Travel_Date: formatDateTimeForZoho(booking.travel_date),
             Booking_Date: bookingDate,
             ...(bookingAmount !== undefined ? { Booking_Amount: bookingAmount } : {}),
             ...(bookingCurrency ? { Booking_Currency: bookingCurrency } : {})
@@ -1222,9 +1247,45 @@ export class WeTravelHistoricContactSyncService {
         }
 
         if (typeof value === 'string') {
-            const normalized = value.replace(/[^0-9.-]/g, '').trim();
-            if (!normalized) {
+            const trimmed = value.trim();
+            if (!trimmed) {
                 return undefined;
+            }
+
+            const cleaned = trimmed.replace(/\s+/g, '').replace(/[^0-9,.-]/g, '');
+            if (!cleaned || cleaned === '-' || cleaned === '.' || cleaned === ',') {
+                return undefined;
+            }
+
+            const hasComma = cleaned.includes(',');
+            const hasDot = cleaned.includes('.');
+
+            let normalized = cleaned;
+
+            if (hasComma && hasDot) {
+                const lastComma = cleaned.lastIndexOf(',');
+                const lastDot = cleaned.lastIndexOf('.');
+                const decimalSeparator = lastComma > lastDot ? ',' : '.';
+                const thousandsSeparator = decimalSeparator === ',' ? '.' : ',';
+                normalized = cleaned
+                    .replace(new RegExp(`\\${thousandsSeparator}`, 'g'), '')
+                    .replace(decimalSeparator, '.');
+            } else if (hasComma) {
+                const commaParts = cleaned.split(',');
+                const lastPart = commaParts[commaParts.length - 1];
+                const looksLikeThousands = commaParts.length > 1 && commaParts.slice(0, -1).every((part) => part.length > 0 && part.length <= 3);
+
+                normalized = looksLikeThousands && lastPart.length === 3
+                    ? cleaned.replace(/,/g, '')
+                    : cleaned.replace(/,/g, '.');
+            } else if (hasDot) {
+                const dotParts = cleaned.split('.');
+                const lastPart = dotParts[dotParts.length - 1];
+                const looksLikeThousands = dotParts.length > 1 && dotParts.slice(0, -1).every((part) => part.length > 0 && part.length <= 3);
+
+                normalized = looksLikeThousands && lastPart.length === 3
+                    ? cleaned.replace(/\./g, '')
+                    : cleaned;
             }
 
             const parsed = Number(normalized);

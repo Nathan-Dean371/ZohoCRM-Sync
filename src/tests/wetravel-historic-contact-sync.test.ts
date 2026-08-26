@@ -717,7 +717,7 @@ describe('WeTravelHistoricContactSyncService', () => {
                 Name: 'Summer Adventure',
                 Contact_Id: 'zoho-contact-1',
                 Product: 'Summer Adventure',
-                Travel_Date: '2026-07-15',
+                Travel_Date: '2026-07-15T00:00:00+00:00',
                 Booking_Date: '2026-06-01T10:00:00+00:00'
             });
 

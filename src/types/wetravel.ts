@@ -8,6 +8,16 @@ export interface WeTravelPagination {
     has_next?: boolean;
 }
 
+export interface WeTravelTripPackage {
+    id?: string | number;
+    package_id?: string | number;
+    start_date?: string;
+    end_date?: string;
+    title?: string;
+    name?: string;
+    [key: string]: unknown;
+}
+
 export interface WeTravelTripBookingResponse {
     id?: string | number;
     reference?: string | number;
@@ -15,9 +25,12 @@ export interface WeTravelTripBookingResponse {
     code?: string | number;
     trip_uuid?: string;
     buyer_id?: string | number;
+    package_id?: string | number;
+    package?: Record<string, unknown> | Array<Record<string, unknown>>;
     product_name?: string;
     travel_date?: string;
     start_date?: string;
+    departure_date?: string;
     created_at?: string;
     amount?: number | string;
     total_amount?: number | string;
@@ -32,8 +45,8 @@ export interface WeTravelTripBookingResponse {
     participants?: Array<Record<string, unknown>>;
     travelers?: Array<Record<string, unknown>>;
     travellers?: Array<Record<string, unknown>>;
-    trip?: Record<string, unknown>;
-    order?: Record<string, unknown>;
+    trip?: Record<string, unknown> & { packages?: WeTravelTripPackage[]; };
+    order?: Record<string, unknown> & { package?: Record<string, unknown>; options?: Array<Record<string, unknown>>; };
     [key: string]: unknown;
 }
 

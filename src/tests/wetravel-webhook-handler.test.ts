@@ -78,6 +78,44 @@ describe('WeTravelWebhookHandler', () => {
         }));
     });
 
+it('normalizes us-formatted booking amounts before upserting', async () => {
+            const idService = {
+                getZohoId: jest.fn().mockResolvedValue(null),
+                saveMapping: jest.fn().mockResolvedValue(undefined)
+            };
+
+            const zohoService = {
+                upsertContact: jest.fn().mockResolvedValue({ id: 'zoho-contact-123' }),
+                upsertBooking: jest.fn().mockResolvedValue({ id: 'zoho-booking-789' })
+            };
+
+            const handler = new WeTravelWebhookHandler(idService as any, zohoService as any);
+
+            const event = {
+                booking: {
+                    uuid: 'wt-booking-456',
+                    contact: {
+                        firstName: 'Ada',
+                        lastName: 'Lovelace',
+                        email: 'ada@example.com'
+                    },
+                    productName: 'Summer Tour',
+                    utcConfirmedAt: '2026-06-16T12:00:00.000Z',
+                    confirmedAt: '2026-06-16T12:00:00.000Z',
+                    totalAmount: '$5,890.00',
+                    currency: 'usd',
+                    status: 'CONFIRMED'
+                }
+            };
+
+            await handler.handleWebhook(event);
+
+            expect(zohoService.upsertBooking).toHaveBeenCalledWith(expect.objectContaining({
+                Booking_Amount: 5890,
+                Booking_Currency: 'USD'
+        }));
+    });
+
     it('prefers trip metadata when productName is missing on the booking payload', async () => {
         const idService = {
             getZohoId: jest.fn().mockResolvedValue(null),

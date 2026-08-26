@@ -84,7 +84,7 @@ export async function handleBookingWebhook(webhookEvent: WebhookEvent) {
             Contact_Id: contactId,  // Changed from Contact object to just the ID
             Booking_Date: formatDateTimeForZoho(booking.bookingDate),
             Product: booking.productName,
-            Travel_Date: booking.travelDate
+            Travel_Date: formatDateTimeForZoho(booking.travelDate)
         };
 
         await crmService.createBooking(zohoBooking);

@@ -84,7 +84,7 @@ class VentrataWebhookHandler {
             Contact_Id: zohoContact.id,  // Link to the contact
             Booking_Date: formatDateTimeForZoho(booking.utcConfirmedAt),
             Product: bookingData.productName,
-            Travel_Date: bookingData.travelDate
+            Travel_Date: formatDateTimeForZoho(bookingData.travelDate)
         });
 
         console.log('Booking processed in Zoho:', {

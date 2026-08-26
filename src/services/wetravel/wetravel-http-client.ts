@@ -56,14 +56,22 @@ export class WeTravelHttpClient implements WeTravelApiClient {
 
         const rawTrips = this.extractTripsFromResponse(rawResponse);
         const trips: WeTravelTrip[] = rawTrips
-            .map((trip) => ({
-                uuid: String(trip.uuid || trip.id || '').trim(),
-                name: this.pickFirstString(trip.title, trip.name) || 'Untitled Trip'
-            }))
+            .map((trip) => this.mapTripToWeTravelTrip(trip))
             .filter((trip) => trip.uuid.length > 0);
 
-        console.log(`Parsed ${trips.length} trips from response`);
-        return trips;
+        const hydratedTrips = await Promise.all(
+            trips.map(async (trip) => {
+                if (this.hasTripDateMetadata(trip)) {
+                    return trip;
+                }
+
+                const detail = await this.fetchTripDetail(trip.uuid);
+                return detail ? this.mergeTripMetadata(trip, detail) : trip;
+            })
+        );
+
+        console.log(`Parsed ${hydratedTrips.length} trips from response`);
+        return hydratedTrips;
     }
 
     async fetchLeads(options: {
@@ -294,14 +302,8 @@ export class WeTravelHttpClient implements WeTravelApiClient {
             'WeTravel Booking'
         );
 
-        const travelDate = this.pickFirstString(
-            raw.travel_date,
-            raw.start_date,
-            (trip.start_date as string | undefined),
-            (order.travel_date as string | undefined),
-            (order.start_date as string | undefined)
-        );
-
+        const packageId = this.extractPackageIdentifier(raw, order, trip);
+        const resolvedTravelDate = this.resolveTripBasedTravelDate(raw, order, trip, packageId);
         const createdAt = this.pickFirstString(
             raw.created_at,
             (order.created_at as string | undefined),
@@ -318,9 +320,11 @@ export class WeTravelHttpClient implements WeTravelApiClient {
                 (order.buyer_id as string | number | undefined),
                 ((order.buyer as Record<string, unknown> | undefined)?.id as string | number | undefined)
             ) || undefined,
+            package_id: packageId || undefined,
+            resolved_package_id: packageId || undefined,
             product_name: productName || undefined,
-            travel_date: travelDate || undefined,
-            start_date: this.pickFirstString(raw.start_date, (trip.start_date as string | undefined), (order.start_date as string | undefined)) || undefined,
+            travel_date: resolvedTravelDate || undefined,
+            start_date: resolvedTravelDate || this.pickFirstString(raw.start_date, (trip.start_date as string | undefined), (order.start_date as string | undefined)) || undefined,
             created_at: createdAt || undefined,
             amount: this.pickFirstNumberOrString(raw.amount, order.amount, order.price),
             total_amount: this.pickFirstNumberOrString(raw.total_amount, order.total_amount, order.total_price, order.total),
@@ -411,6 +415,254 @@ export class WeTravelHttpClient implements WeTravelApiClient {
         }
 
         return undefined;
+    }
+
+    private mapTripToWeTravelTrip(rawTrip: any): WeTravelTrip {
+        const packages = this.extractTripPackages(rawTrip);
+        return {
+            uuid: String(rawTrip?.uuid || rawTrip?.id || '').trim(),
+            name: this.pickFirstString(rawTrip?.title, rawTrip?.name) || 'Untitled Trip',
+            currency: this.pickFirstString(rawTrip?.currency) || undefined,
+            start_date: this.pickFirstString(
+                rawTrip?.start_date,
+                rawTrip?.startDate,
+                rawTrip?.trip_start_date,
+                rawTrip?.tripStartDate
+            ) || undefined,
+            end_date: this.pickFirstString(
+                rawTrip?.end_date,
+                rawTrip?.endDate,
+                rawTrip?.trip_end_date,
+                rawTrip?.tripEndDate
+            ) || undefined,
+            departure_date: this.pickFirstString(
+                rawTrip?.departure_date,
+                rawTrip?.departureDate,
+                rawTrip?.departure,
+                rawTrip?.trip_departure_date,
+                rawTrip?.tripDepartureDate
+            ) || undefined,
+            packages: packages.length > 0 ? packages : undefined
+        };
+    }
+
+    private mergeTripMetadata(baseTrip: WeTravelTrip, detail: WeTravelTrip | null | undefined): WeTravelTrip {
+        if (!detail) {
+            return baseTrip;
+        }
+
+        return {
+            ...baseTrip,
+            name: baseTrip.name || detail.name || 'Untitled Trip',
+            start_date: baseTrip.start_date || detail.start_date,
+            end_date: baseTrip.end_date || detail.end_date,
+            departure_date: baseTrip.departure_date || detail.departure_date,
+            currency: baseTrip.currency || detail.currency,
+            packages: baseTrip.packages && baseTrip.packages.length > 0 ? baseTrip.packages : detail.packages
+        };
+    }
+
+    private hasTripDateMetadata(trip: WeTravelTrip): boolean {
+        return !!(
+            trip.start_date ||
+            trip.end_date ||
+            trip.departure_date ||
+            (trip.packages && trip.packages.length > 0)
+        );
+    }
+
+    private async fetchTripDetail(tripUuid: string): Promise<WeTravelTrip | null> {
+        const token = await this.tokenManager.getAccessToken();
+        const url = `${this.apiBaseUrl}/draft_trips/${encodeURIComponent(tripUuid)}`;
+
+        console.log('Fetching WeTravel trip detail from:', url);
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) {
+                return null;
+            }
+
+            const errorBody = await response.text();
+            console.error('WeTravel trip detail API error details:', errorBody);
+            throw new Error(`WeTravel API error: ${response.status} ${response.statusText}`);
+        }
+
+        const detail = await response.json();
+        return this.mapTripToWeTravelTrip(detail);
+    }
+
+    private extractTripPackages(rawTrip: Record<string, unknown> | undefined): Array<{ id?: string | number; start_date?: string; end_date?: string; title?: string; name?: string; }> {
+        const packages = Array.isArray(rawTrip?.packages)
+            ? rawTrip.packages
+            : Array.isArray(rawTrip?.package_list)
+                ? rawTrip.package_list
+                : [];
+
+        const normalized: Array<{ id: string | number; start_date?: string; end_date?: string; title?: string; name?: string; }> = [];
+
+        for (const entry of packages) {
+            if (!entry || typeof entry !== 'object') {
+                continue;
+            }
+
+            const pkg = entry as Record<string, unknown>;
+            const packageId = this.pickFirstIdentifier(
+                pkg.id,
+                pkg.package_id,
+                pkg.packageId,
+                pkg.uuid
+            );
+
+            if (!packageId) {
+                continue;
+            }
+
+            normalized.push({
+                id: packageId,
+                start_date: this.pickFirstString(
+                    pkg.start_date,
+                    pkg.startDate,
+                    pkg.package_start_date,
+                    pkg.packageStartDate
+                ) || undefined,
+                end_date: this.pickFirstString(
+                    pkg.end_date,
+                    pkg.endDate,
+                    pkg.package_end_date,
+                    pkg.packageEndDate
+                ) || undefined,
+                title: this.pickFirstString(pkg.title, pkg.name, pkg.package_name, pkg.packageName) || undefined,
+                name: this.pickFirstString(pkg.name, pkg.title) || undefined
+            });
+        }
+
+        const deduped = new Map<string, { id: string | number; start_date?: string; end_date?: string; title?: string; name?: string; }>();
+        for (const pkg of normalized) {
+            const key = String(pkg.id);
+            if (!deduped.has(key)) {
+                deduped.set(key, pkg);
+            }
+        }
+
+        return Array.from(deduped.values());
+    }
+
+    private extractPackageIdentifier(
+        raw: WeTravelTripBookingResponse,
+        order: Record<string, unknown>,
+        trip: Record<string, unknown>
+    ): string | null {
+        const tripPackages = Array.isArray(trip.packages) ? trip.packages as Array<Record<string, unknown>> : [];
+        const packageCandidates = [
+            raw.package_id,
+            raw.packageId,
+            (raw.package as Record<string, unknown> | undefined)?.id,
+            (raw.package as Record<string, unknown> | undefined)?.package_id,
+            (raw.package as Record<string, unknown> | undefined)?.packageId,
+            order.package_id,
+            order.packageId,
+            (order.package as Record<string, unknown> | undefined)?.id,
+            (order.package as Record<string, unknown> | undefined)?.package_id,
+            (order.package as Record<string, unknown> | undefined)?.packageId,
+            (order.item as Record<string, unknown> | undefined)?.package_id,
+            (order.item as Record<string, unknown> | undefined)?.packageId,
+            ...((Array.isArray(order.options) ? order.options : []) as Array<Record<string, unknown>>).flatMap((option) => [
+                option.package_id,
+                option.packageId,
+                (option.package as Record<string, unknown> | undefined)?.id,
+                (option.package as Record<string, unknown> | undefined)?.package_id,
+                (option.package as Record<string, unknown> | undefined)?.packageId
+            ]),
+            ...tripPackages.map((pkg) => pkg.id || pkg.package_id || pkg.packageId)
+        ];
+
+        const packageId = this.pickFirstIdentifier(...packageCandidates);
+        if (packageId) {
+            return packageId;
+        }
+
+        const nestedPackage = this.pickFirstIdentifier(
+            (raw.order as Record<string, unknown> | undefined)?.package_id,
+            (raw.order as Record<string, unknown> | undefined)?.packageId,
+            ((raw.order as Record<string, unknown> | undefined)?.package as Record<string, unknown> | undefined)?.id,
+            ((raw.order as Record<string, unknown> | undefined)?.package as Record<string, unknown> | undefined)?.package_id
+        );
+
+        return nestedPackage;
+    }
+
+    private resolveTripBasedTravelDate(
+        raw: WeTravelTripBookingResponse,
+        order: Record<string, unknown>,
+        trip: Record<string, unknown>,
+        packageId?: string | null
+    ): string | null {
+        const tripPackages = Array.isArray(trip.packages) ? trip.packages as Array<Record<string, unknown>> : [];
+        const matchedPackage = packageId
+            ? tripPackages.find((pkg) => {
+                const candidate = this.pickFirstIdentifier(pkg.id, pkg.package_id, pkg.packageId, pkg.uuid);
+                return candidate && candidate === packageId;
+            })
+            : undefined;
+
+        const packageDate = matchedPackage
+            ? this.pickFirstString(
+                matchedPackage.start_date,
+                matchedPackage.startDate,
+                matchedPackage.package_start_date,
+                matchedPackage.packageStartDate,
+                matchedPackage.end_date,
+                matchedPackage.endDate
+            )
+            : null;
+
+        const tripDepartureDate = this.pickFirstString(
+            trip.departure_date,
+            trip.departureDate,
+            trip.departure,
+            trip.trip_departure_date,
+            trip.tripDepartureDate
+        );
+
+        const tripStartDate = this.pickFirstString(
+            trip.start_date,
+            trip.startDate,
+            trip.trip_start_date,
+            trip.tripStartDate
+        );
+
+        const rawDate = this.pickFirstString(
+            raw.travel_date,
+            raw.start_date,
+            raw.departure_date,
+            (order.travel_date as string | undefined),
+            (order.start_date as string | undefined),
+            (order.departure_date as string | undefined),
+            (order.date as string | undefined)
+        );
+
+        const resolved = packageDate || tripDepartureDate || tripStartDate || rawDate;
+
+        console.log('[WeTravel travel date resolution]', {
+            reference: raw.reference || raw.id,
+            packageId: packageId || null,
+            source: packageDate ? 'package start_date' : tripDepartureDate ? 'trip departure_date' : tripStartDate ? 'trip start_date' : rawDate ? 'booking/order raw fields' : 'none',
+            packageDate,
+            tripDepartureDate,
+            tripStartDate,
+            rawDate,
+            resolved
+        });
+
+        return resolved || null;
     }
 
     private extractTripsFromResponse(rawResponse: any): any[] {

@@ -87,18 +87,63 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
                 }
             ];
 
-            (global.fetch as jest.Mock).mockResolvedValueOnce({
-                ok: true,
-                status: 200,
-                json: async () => apiResponse
-            });
+            (global.fetch as jest.Mock)
+                .mockResolvedValueOnce({
+                    ok: true,
+                    status: 200,
+                    json: async () => apiResponse
+                })
+                .mockResolvedValueOnce({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        id: 77236795,
+                        uuid: 'trip-77236795-uuid',
+                        title: 'Tellus360 Ireland Trip - May 2022',
+                        start_date: '2026-05-01'
+                    })
+                });
 
             const trips = await httpClient.fetchTrips();
 
             expect(trips).toHaveLength(1);
             expect(trips[0]).toMatchObject({
                 uuid: 'trip-77236795-uuid',
-                name: 'Tellus360 Ireland Trip - May 2022'
+                name: 'Tellus360 Ireland Trip - May 2022',
+                start_date: '2026-05-01'
+            });
+        });
+
+        test('hydrates trip metadata from per-trip details when the list API omits dates and packages', async () => {
+            (global.fetch as jest.Mock)
+                .mockResolvedValueOnce({
+                    ok: true,
+                    status: 200,
+                    json: async () => [
+                        { uuid: 'trip-42', name: 'Trip 42' }
+                    ]
+                })
+                .mockResolvedValueOnce({
+                    ok: true,
+                    status: 200,
+                    json: async () => ({
+                        uuid: 'trip-42',
+                        name: 'Trip 42',
+                        departure_date: '2026-05-09',
+                        start_date: '2026-05-10',
+                        packages: [{ id: 'package-99', start_date: '2026-05-11' }]
+                    })
+                });
+
+            const trips = await httpClient.fetchTrips();
+
+            expect(global.fetch).toHaveBeenCalledTimes(2);
+            expect(trips[0]).toMatchObject({
+                uuid: 'trip-42',
+                name: 'Trip 42',
+                departure_date: '2026-05-09',
+                start_date: '2026-05-10',
+                packages: [{ id: 'package-99', start_date: '2026-05-11' }]
             });
         });
     });
@@ -209,6 +254,182 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
             expect(bookings[0].id).toBe('2775611458');
             expect(bookings[0].reference).toBe('2775611458');
             expect(bookings[0].product_name).toBe('WeTravel Booking');
+        });
+
+        test('prefers package start_date before trip departure/start and raw booking dates', async () => {
+            const apiResponse = {
+                bookings: [
+                    {
+                        id: 301,
+                        reference: 'WT-301',
+                        travel_date: '2026-07-20',
+                        start_date: '2026-07-21',
+                        order: {
+                            package_id: 'package-9',
+                            travel_date: '2026-07-12',
+                            start_date: '2026-07-13'
+                        },
+                        trip: {
+                            uuid: 'trip-1',
+                            departure_date: '2026-07-25',
+                            start_date: '2026-07-26',
+                            packages: [{ id: 'package-9', start_date: '2026-07-15' }]
+                        }
+                    }
+                ],
+                pagination: {
+                    page: 1,
+                    per_page: 100,
+                    total_count: 1
+                }
+            };
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => apiResponse
+            });
+
+            const bookings = await httpClient.fetchTripBookings('trip-1');
+
+            expect(bookings[0].travel_date).toBe('2026-07-15');
+            expect(bookings[0].start_date).toBe('2026-07-15');
+        });
+
+        test('uses trip departure_date when no package start_date matches', async () => {
+            const apiResponse = {
+                bookings: [
+                    {
+                        id: 302,
+                        reference: 'WT-302',
+                        travel_date: '2026-07-20',
+                        order: {
+                            travel_date: '2026-07-12',
+                            start_date: '2026-07-13'
+                        },
+                        trip: {
+                            uuid: 'trip-2',
+                            departure_date: '2026-07-25',
+                            start_date: '2026-07-26'
+                        }
+                    }
+                ],
+                pagination: {
+                    page: 1,
+                    per_page: 100,
+                    total_count: 1
+                }
+            };
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => apiResponse
+            });
+
+            const bookings = await httpClient.fetchTripBookings('trip-2');
+
+            expect(bookings[0].travel_date).toBe('2026-07-25');
+        });
+
+        test('uses trip start_date when no package or departure date is available', async () => {
+            const apiResponse = {
+                bookings: [
+                    {
+                        id: 303,
+                        reference: 'WT-303',
+                        travel_date: '2026-07-20',
+                        order: {
+                            travel_date: '2026-07-12'
+                        },
+                        trip: {
+                            uuid: 'trip-3',
+                            start_date: '2026-07-26'
+                        }
+                    }
+                ],
+                pagination: {
+                    page: 1,
+                    per_page: 100,
+                    total_count: 1
+                }
+            };
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => apiResponse
+            });
+
+            const bookings = await httpClient.fetchTripBookings('trip-3');
+
+            expect(bookings[0].travel_date).toBe('2026-07-26');
+        });
+
+        test('falls back to raw booking/order dates only when trip metadata is absent', async () => {
+            const apiResponse = {
+                bookings: [
+                    {
+                        id: 304,
+                        reference: 'WT-304',
+                        travel_date: '2026-07-20',
+                        start_date: '2026-07-21',
+                        order: {
+                            travel_date: '2026-07-12',
+                            start_date: '2026-07-13'
+                        }
+                    }
+                ],
+                pagination: {
+                    page: 1,
+                    per_page: 100,
+                    total_count: 1
+                }
+            };
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => apiResponse
+            });
+
+            const bookings = await httpClient.fetchTripBookings('trip-4');
+
+            expect(bookings[0].travel_date).toBe('2026-07-20');
+        });
+
+        test('extracts package ids from nested booking and order payload variants', async () => {
+            const apiResponse = {
+                bookings: [
+                    {
+                        id: 305,
+                        reference: 'WT-305',
+                        order: {
+                            package: { id: 'pkg-order-nested' },
+                            travel_date: '2026-07-12'
+                        },
+                        trip: {
+                            uuid: 'trip-5',
+                            packages: [{ id: 'pkg-order-nested', start_date: '2026-07-15' }]
+                        }
+                    }
+                ],
+                pagination: {
+                    page: 1,
+                    per_page: 100,
+                    total_count: 1
+                }
+            };
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => apiResponse
+            });
+
+            const bookings = await httpClient.fetchTripBookings('trip-5');
+
+            expect(bookings[0].travel_date).toBe('2026-07-15');
         });
 
         test('fetches buyer booking detail endpoint for participant enrichment', async () => {
