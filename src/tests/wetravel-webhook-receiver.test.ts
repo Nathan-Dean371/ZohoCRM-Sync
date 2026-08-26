@@ -1,5 +1,21 @@
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+
+function generateSvixSignature(payload: any, secret: string) {
+    const svixId = `msg_${Math.random().toString(36).substr(2, 9)}`;
+    const svixTimestamp = Math.floor(Date.now() / 1000).toString();
+    const signedContent = `${svixId}.${svixTimestamp}.${JSON.stringify(payload)}`;
+    const signature = crypto
+        .createHmac('sha256', secret)
+        .update(signedContent)
+        .digest('base64');
+    return {
+        svixId,
+        svixTimestamp,
+        svixSignature: `v1,${signature}`
+    };
+}
 
 jest.mock('../services/database/databaseConnector', () => ({
     __esModule: true,
@@ -99,9 +115,13 @@ describe('WeTravel Webhook Endpoint - POST /api/webhook/wetravel', () => {
             status: 'RECEIVED'
         });
 
+        const { svixId, svixTimestamp, svixSignature } = generateSvixSignature(mockEvent, configuredSecret);
+
         const response = await request(app)
             .post('/api/webhook/wetravel')
-            .set('X-Webhook-Secret', configuredSecret)
+            .set('svix-id', svixId)
+            .set('svix-timestamp', svixTimestamp)
+            .set('svix-signature', svixSignature)
             .send(mockEvent);
 
         expect(response.status).toBe(200);
@@ -115,7 +135,7 @@ describe('WeTravel Webhook Endpoint - POST /api/webhook/wetravel', () => {
         );
     });
 
-    it('Rejects webhook with an invalid X-Webhook-Secret value', async () => {
+    it('Rejects webhook with an invalid Svix signature value', async () => {
         const mockEvent = {
             id: 'evt_123456',
             type: 'booking.created'
@@ -123,15 +143,17 @@ describe('WeTravel Webhook Endpoint - POST /api/webhook/wetravel', () => {
 
         const response = await request(app)
             .post('/api/webhook/wetravel')
-            .set('X-Webhook-Secret', 'wrong-secret')
+            .set('svix-id', 'msg_123')
+            .set('svix-timestamp', '1234567890')
+            .set('svix-signature', 'v1,invalid-signature')
             .send(mockEvent);
 
         expect(response.status).toBe(401);
         expect(response.body).toHaveProperty('error');
-        expect(response.body.error).toContain('Invalid X-Webhook-Secret');
+        expect(response.body.error).toContain('Invalid Svix signature');
     });
 
-    it('Rejects webhook without X-Webhook-Secret authentication header', async () => {
+    it('Rejects webhook without Svix signature headers', async () => {
         const mockEvent = {
             id: 'evt_123456',
             type: 'booking.created'
@@ -143,6 +165,6 @@ describe('WeTravel Webhook Endpoint - POST /api/webhook/wetravel', () => {
 
         expect(response.status).toBe(401);
         expect(response.body).toHaveProperty('error');
-        expect(response.body.error).toContain('Missing X-Webhook-Secret');
+        expect(response.body.error).toContain('Missing Svix signature headers');
     });
 });

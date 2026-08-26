@@ -12,25 +12,11 @@ function secretsMatch(providedSecret: string, configuredSecret: string) {
     const providedBuffer = Buffer.from(providedSecret);
     const configuredBuffer = Buffer.from(configuredSecret);
 
-    console.log('secretsMatch comparison:', {
-        providedLength: providedBuffer.length,
-        configuredLength: configuredBuffer.length,
-        providedPrefix: providedSecret.substring(0, 20),
-        configuredPrefix: configuredSecret.substring(0, 20),
-        lengthsMatch: providedBuffer.length === configuredBuffer.length
-    });
-
     if (providedBuffer.length !== configuredBuffer.length) {
-        console.warn('❌ Secret length mismatch!', {
-            provided: providedBuffer.length,
-            expected: configuredBuffer.length
-        });
         return false;
     }
 
-    const matches = crypto.timingSafeEqual(providedBuffer, configuredBuffer);
-    console.log('✅ Timing safe comparison result:', matches);
-    return matches;
+    return crypto.timingSafeEqual(providedBuffer, configuredBuffer);
 }
 
 export const processVentrataWebhook: RequestHandler = async (req, res) => {
@@ -112,12 +98,6 @@ export const processWeTravelWebhook: RequestHandler = async (req, res) => {
         return;
     }
 
-    // Debug: Log secret prefix (without exposing full secret)
-    console.log('WeTravel webhook secret loaded:', {
-        prefix: configuredWeTravelWebhookSecret.substring(0, 10),
-        length: configuredWeTravelWebhookSecret.length
-    });
-
     // Validate Svix signature headers are present
     if (!svixSignature || !svixTimestamp || !svixId) {
         console.warn('Missing Svix signature headers', { svixId, hasSignature: !!svixSignature, hasTimestamp: !!svixTimestamp });
@@ -128,63 +108,31 @@ export const processWeTravelWebhook: RequestHandler = async (req, res) => {
     // Validate Svix HMAC signature
     const bodyJson = JSON.stringify(req.body);
     const signedContent = `${svixId}.${svixTimestamp}.${bodyJson}`;
-    
-    console.log('Signature validation debug:', {
-        svixId,
-        svixTimestamp,
-        bodyJson,
-        signedContent,
-        secret: configuredWeTravelWebhookSecret.substring(0, 20) + '...'
-    });
 
-    // Extract base64 portion of secret (after whsec_) and decode it
-    const secretBase64 = configuredWeTravelWebhookSecret.split('_')[1];
-    const secretBytes = Buffer.from(secretBase64, 'base64');
-    
-    console.log('Secret decoding:', {
-        fullSecret: configuredWeTravelWebhookSecret.substring(0, 30) + '...',
-        secretBase64: secretBase64.substring(0, 30) + '...',
-        decodedLength: secretBytes.length
-    });
+    // Svix secrets are prefixed with "whsec_".
+    // If formatted with whsec_ prefix, extract the base64 portion and decode it.
+    const secretBytes = configuredWeTravelWebhookSecret.startsWith('whsec_')
+        ? Buffer.from(configuredWeTravelWebhookSecret.substring(6), 'base64')
+        : Buffer.from(configuredWeTravelWebhookSecret, 'utf-8');
 
     const expectedSignature = crypto
         .createHmac('sha256', secretBytes)
         .update(signedContent)
         .digest('base64');
 
-    console.log('Signature calculation:', {
-        expectedSignature,
-        svixSignatureHeader: svixSignature.substring(0, 50) + '...'
-    });
-
     // Extract the actual signature from "v1,v2,..." format
     const signatures = svixSignature.split(' ').map(sig => sig.split(',')[1]).filter(Boolean);
-    console.log('Extracted signatures:', {
-        count: signatures.length,
-        signatures: signatures.map(s => s?.substring(0, 30) + '...')
-    });
 
-    const isValid = signatures.some(sig => {
-        const matches = secretsMatch(sig || '', expectedSignature);
-        console.log('Comparing signature:', {
-            provided: (sig || '').substring(0, 30) + '...',
-            expected: expectedSignature.substring(0, 30) + '...',
-            matches
-        });
-        return matches;
-    });
+    const isValid = signatures.some(sig => secretsMatch(sig || '', expectedSignature));
 
     if (!isValid) {
         console.warn('Invalid Svix signature validation failed', { 
             svixId,
-            expectedSignature: expectedSignature.substring(0, 30) + '...',
             providedSignatures: signatures.length
         });
         res.status(401).json({ error: 'Unauthorized: Invalid Svix signature' });
         return;
     }
-    
-    console.log('✅ Svix signature validation PASSED', { svixId });
 
     try {
         // Persist to Webhook_Logs
