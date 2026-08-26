@@ -5,16 +5,13 @@ import path from 'path';
 console.log('Starting server initialization...');
 console.log('Current directory:', __dirname);
 
-// Load environment variables first
 const envPath = path.resolve(__dirname, '../.env');
-console.log('Loading .env file from:', envPath);
 const result = dotenv.config({ path: envPath });
 
 if (result.error) {
-    console.error('Error loading .env file:', result.error);
-    process.exit(1);
+    console.log('No .env file found, using system environment variables.');
 } else {
-    console.log('Environment variables loaded successfully');
+    console.log('Environment variables loaded from .env file successfully');
 }
 
 // Now import app after environment variables are loaded
