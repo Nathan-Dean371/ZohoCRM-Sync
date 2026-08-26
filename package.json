@@ -17,7 +17,7 @@
     "tunnel": "ts-node src/scripts/tunnel.ts",
     "reconcile:wetravel": "ts-node src/scripts/reconcile-wetravel-idempotency.ts",
     "dev:tunnel": "concurrently \"npm run dev\" \"npm run tunnel\"",
-    "postinstall": "prisma generate",
+    "postinstall": "prisma generate"
 
   },
   "keywords": [],
