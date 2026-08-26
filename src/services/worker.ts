@@ -4,13 +4,11 @@ import { isNonRetryableError } from '../utils/errors';
 import VentrataWebhookHandler from './ventrata/ventrata-webhook-handler';
 import WeTravelWebhookHandler from './wetravel/wetravel-webhook-handler';
 import { integrationDataService } from './integrations/integration-config-service';
+import { getRedisConnectionOptions } from './redis-connection';
 
 dotenv.config();
 
-const connection = {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379', 10),
-};
+const connection = getRedisConnectionOptions();
 
 const ventrataHandler = new VentrataWebhookHandler();
 const wetravelHandler = new WeTravelWebhookHandler();

@@ -359,7 +359,8 @@ export class WeTravelHistoricContactSyncService {
                     if (zohoBooking.id) {
                         await this.idService.saveMapping(
                             booking.reference,
-                            zohoBooking.id
+                            zohoBooking.id,
+                            'wetravel'
                         );
                     }
 
@@ -1237,7 +1238,7 @@ export class WeTravelHistoricContactSyncService {
             Travel_Date: formatDateTimeForZoho(booking.travel_date),
             Booking_Date: bookingDate,
             ...(bookingAmount !== undefined ? { Booking_Amount: bookingAmount } : {}),
-            ...(bookingCurrency ? { Booking_Currency: bookingCurrency } : {})
+            ...(bookingCurrency ? { Booking_Currency: bookingCurrency, Currency: bookingCurrency } : {})
         };
     }
 

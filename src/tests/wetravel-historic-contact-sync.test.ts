@@ -724,7 +724,8 @@ describe('WeTravelHistoricContactSyncService', () => {
             // Verify idempotency tracking with correct source_type
             expect(idempotencyService.saveMapping).toHaveBeenCalledWith(
                 'WT-2026-001',
-                'zoho-booking-1'
+                'zoho-booking-1',
+                'wetravel'
             );
 
             // Verify job counters updated

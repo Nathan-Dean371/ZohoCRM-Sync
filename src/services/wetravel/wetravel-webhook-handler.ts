@@ -63,8 +63,7 @@ class WeTravelWebhookHandler {
     // Check idempotency
     const existingZohoId = await this.idService.getZohoId(leadIdStr, 'wetravel');
     if (existingZohoId) {
-      console.log(`⏭️  Lead ${leadIdStr} already processed (Zoho ID: ${existingZohoId}). Skipping duplicate.`);
-      return;
+      console.log(`Lead ${leadIdStr} already processed (Zoho ID: ${existingZohoId}). Updating record...`);
     }
 
     // Extract and create contact in Zoho
@@ -113,15 +112,12 @@ class WeTravelWebhookHandler {
 
     const existingZohoId = await this.idService.getZohoId(bookingIdStr, 'wetravel');
     if (existingZohoId) {
-      console.log(`Booking ${bookingIdStr} already processed (Zoho ID: ${existingZohoId}). Skipping duplicate replay.`);
-      return;
+      console.log(`Booking ${bookingIdStr} already processed (Zoho ID: ${existingZohoId}). Updating record...`);
     }
 
-    // Only handle bookings that are relevant (e.g., created/updated/cancelled)
+    // Map cancellation / booking status from lifecycle and booking payload
     const lifecycle = booking.status || event.type || 'unknown';
-
-    // If booking was cancelled and we don't support cancellations in Zoho, skip
-    // Otherwise proceed to ensure contact exists first
+    const bookingStatus = this.mapBookingStatus(lifecycle, booking);
 
     const contact = this.extractContactData(booking);
 
@@ -147,8 +143,10 @@ class WeTravelWebhookHandler {
       Booking_Date: formatDateTimeForZoho(booking.utcConfirmedAt || booking.confirmedAt),
       Product: bookingData.productName,
       Travel_Date: formatDateTimeForZoho(bookingData.travelDate),
+      Booking_Status: bookingStatus,
+      Status: bookingStatus,
       ...(bookingData.amount !== undefined ? { Booking_Amount: bookingData.amount } : {}),
-      ...(bookingData.currency ? { Booking_Currency: bookingData.currency } : {})
+      ...(bookingData.currency ? { Booking_Currency: bookingData.currency, Currency: bookingData.currency } : {})
     });
 
     if (zohoBooking?.id) {
@@ -303,6 +301,23 @@ class WeTravelWebhookHandler {
 
     const trimmed = value.trim().toUpperCase();
     return trimmed || undefined;
+  }
+
+  private mapBookingStatus(lifecycle: string, booking: any): string {
+    const raw = (lifecycle || '').toString().toLowerCase();
+    if (booking?.cancelled === true || raw.includes('cancel')) {
+      return 'Cancelled';
+    }
+    if (raw.includes('refund')) {
+      return 'Refunded';
+    }
+    if (raw.includes('confirm') || raw.includes('paid') || raw.includes('create') || raw.includes('update')) {
+      return 'Confirmed';
+    }
+    if (booking?.status) {
+      return String(booking.status);
+    }
+    return 'Confirmed';
   }
 }
 

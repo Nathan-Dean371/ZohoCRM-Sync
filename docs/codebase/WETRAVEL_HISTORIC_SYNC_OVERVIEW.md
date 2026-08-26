@@ -371,6 +371,7 @@ Each booking is mapped to Zoho with:
 - `Booking_Date`: formatted `created_at`.
 - `Booking_Amount`: parsed from `total_amount`, then `paid_amount`, then `amount`.
 - `Booking_Currency`: uppercased `currency_code` or `currency`.
+- `Currency`: native Zoho system currency field set to uppercased `currency_code` or `currency`.
 
 Example outbound Zoho booking payload:
 
@@ -383,6 +384,7 @@ Example outbound Zoho booking payload:
     "Travel_Date": "2026-07-15",
     "Booking_Date": "2026-06-01T10:00:00+00:00",
     "Booking_Amount": 1299,
+    "Currency": "USD",
     "Booking_Currency": "USD"
 }
 ```

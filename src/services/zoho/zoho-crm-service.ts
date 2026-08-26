@@ -244,7 +244,8 @@ class ZohoCRMService {
                     Product: bookingData.Product,
                     Travel_Date: bookingData.Travel_Date,
                     Booking_Amount: bookingData.Booking_Amount,
-                    Booking_Currency: bookingData.Booking_Currency
+                    Booking_Currency: bookingData.Booking_Currency,
+                    Currency: bookingData.Currency
                 };
         
             } catch (error) {

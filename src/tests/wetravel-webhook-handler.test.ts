@@ -1,7 +1,7 @@
 import WeTravelWebhookHandler from '../services/wetravel/wetravel-webhook-handler';
 
 describe('WeTravelWebhookHandler', () => {
-    it('skips duplicate CRM work when the same booking is replayed', async () => {
+    it('proceeds with CRM record update when existing booking is replayed', async () => {
         const idService = {
             getZohoId: jest.fn()
                 .mockResolvedValueOnce(null)
@@ -35,8 +35,8 @@ describe('WeTravelWebhookHandler', () => {
         await handler.handleWebhook(event);
 
         expect(idService.getZohoId).toHaveBeenCalledWith('wt-booking-123', 'wetravel');
-        expect(zohoService.upsertContact).toHaveBeenCalledTimes(1);
-        expect(zohoService.upsertBooking).toHaveBeenCalledTimes(1);
+        expect(zohoService.upsertContact).toHaveBeenCalledTimes(2);
+        expect(zohoService.upsertBooking).toHaveBeenCalledTimes(2);
         expect(idService.saveMapping).toHaveBeenCalledWith('wt-booking-123', 'zoho-booking-789', 'wetravel');
     });
 
@@ -74,7 +74,8 @@ describe('WeTravelWebhookHandler', () => {
 
         expect(zohoService.upsertBooking).toHaveBeenCalledWith(expect.objectContaining({
             Booking_Amount: 5532,
-            Booking_Currency: 'EUR'
+            Booking_Currency: 'EUR',
+            Currency: 'EUR'
         }));
     });
 
@@ -112,7 +113,8 @@ it('normalizes us-formatted booking amounts before upserting', async () => {
 
             expect(zohoService.upsertBooking).toHaveBeenCalledWith(expect.objectContaining({
                 Booking_Amount: 5890,
-                Booking_Currency: 'USD'
+                Booking_Currency: 'USD',
+                Currency: 'USD'
         }));
     });
 
@@ -236,7 +238,7 @@ it('normalizes us-formatted booking amounts before upserting', async () => {
             expect(idService.saveMapping).toHaveBeenCalledWith('wt-lead-123', 'zoho-contact-456', 'wetravel');
         });
 
-        it('skips duplicate lead.created events by checking idempotency', async () => {
+        it('proceeds with contact update on replayed lead.created events', async () => {
             const idService = {
                 getZohoId: jest.fn().mockResolvedValue('zoho-contact-456'),
                 saveMapping: jest.fn().mockResolvedValue(undefined)
@@ -260,8 +262,14 @@ it('normalizes us-formatted booking amounts before upserting', async () => {
 
             await handler.handleWebhook(leadEvent);
 
-            expect(zohoService.upsertContact).not.toHaveBeenCalled();
-            expect(idService.saveMapping).not.toHaveBeenCalled();
+            expect(zohoService.upsertContact).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    First_Name: 'Jane',
+                    Last_Name: 'Doe',
+                    Email: 'jane@example.com'
+                })
+            );
+            expect(idService.saveMapping).toHaveBeenCalledWith('wt-lead-123', 'zoho-contact-456', 'wetravel');
         });
 
         it('handles leads with alternative field names (emailAddress instead of email)', async () => {
@@ -441,6 +449,80 @@ it('normalizes us-formatted booking amounts before upserting', async () => {
 
             expect(zohoService.upsertContact).not.toHaveBeenCalled();
             expect(idService.saveMapping).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Status and Cancellation Mapping', () => {
+        it('maps cancelled booking status to Cancelled in Zoho', async () => {
+            const idService = {
+                getZohoId: jest.fn().mockResolvedValue(null),
+                saveMapping: jest.fn().mockResolvedValue(undefined)
+            };
+
+            const zohoService = {
+                upsertContact: jest.fn().mockResolvedValue({ id: 'zoho-contact-123' }),
+                upsertBooking: jest.fn().mockResolvedValue({ id: 'zoho-booking-cancelled' })
+            };
+
+            const handler = new WeTravelWebhookHandler(idService as any, zohoService as any);
+
+            const event = {
+                type: 'booking.cancelled',
+                booking: {
+                    uuid: 'wt-booking-cancelled-123',
+                    contact: {
+                        firstName: 'Ada',
+                        lastName: 'Lovelace',
+                        email: 'ada@example.com'
+                    },
+                    productName: 'Summer Tour',
+                    utcConfirmedAt: '2026-06-16T12:00:00.000Z',
+                    status: 'CANCELLED'
+                }
+            };
+
+            await handler.handleWebhook(event);
+
+            expect(zohoService.upsertBooking).toHaveBeenCalledWith(expect.objectContaining({
+                Booking_Status: 'Cancelled',
+                Status: 'Cancelled'
+            }));
+        });
+
+        it('maps confirmed booking status to Confirmed in Zoho', async () => {
+            const idService = {
+                getZohoId: jest.fn().mockResolvedValue(null),
+                saveMapping: jest.fn().mockResolvedValue(undefined)
+            };
+
+            const zohoService = {
+                upsertContact: jest.fn().mockResolvedValue({ id: 'zoho-contact-123' }),
+                upsertBooking: jest.fn().mockResolvedValue({ id: 'zoho-booking-confirmed' })
+            };
+
+            const handler = new WeTravelWebhookHandler(idService as any, zohoService as any);
+
+            const event = {
+                type: 'booking.updated',
+                booking: {
+                    uuid: 'wt-booking-confirmed-123',
+                    contact: {
+                        firstName: 'Ada',
+                        lastName: 'Lovelace',
+                        email: 'ada@example.com'
+                    },
+                    productName: 'Summer Tour',
+                    utcConfirmedAt: '2026-06-16T12:00:00.000Z',
+                    status: 'CONFIRMED'
+                }
+            };
+
+            await handler.handleWebhook(event);
+
+            expect(zohoService.upsertBooking).toHaveBeenCalledWith(expect.objectContaining({
+                Booking_Status: 'Confirmed',
+                Status: 'Confirmed'
+            }));
         });
     });
 });
