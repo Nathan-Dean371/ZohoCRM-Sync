@@ -38,7 +38,18 @@ export class WeTravelAuthService implements WeTravelAuthClient {
         });
 
         if (!response.ok) {
-            throw new Error(`WeTravel token exchange failed with HTTP ${response.status}`);
+            let errorBody = '';
+            try {
+                errorBody = await response.text();
+            } catch {
+                // ignore body read failures
+            }
+            console.error('WeTravel token exchange rejected:', {
+                status: response.status,
+                endpoint: this.tokenEndpoint,
+                body: errorBody
+            });
+            throw new Error(`WeTravel token exchange failed with HTTP ${response.status}${errorBody ? `: ${errorBody}` : ''}`);
         }
 
         const payload = await response.json() as {
