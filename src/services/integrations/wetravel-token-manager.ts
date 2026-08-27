@@ -56,10 +56,10 @@ export class WeTravelTokenManager {
         };
     }
 
-    private async refreshAccessToken(seedToken: string): Promise<string> {
+    private async refreshAccessToken(seedToken: string, orgId?: string | null): Promise<string> {
         try {
             const token = await this.authClient.exchangeBearerToken(seedToken);
-            await this.saveTokenState(token);
+            await this.saveTokenState(token, orgId);
             return token.access_token;
         } catch (error) {
             const message = this.toOperatorMessage(error);
@@ -93,13 +93,13 @@ export class WeTravelTokenManager {
                 throw new Error(message);
             }
 
-            return await this.refreshAccessToken(credentials.apiKey);
+            return await this.refreshAccessToken(credentials.apiKey, credentials.orgId);
         } finally {
             this.refreshPromise = null;
         }
     }
 
-    private async saveTokenState(token: WeTravelBearerToken): Promise<void> {
+    private async saveTokenState(token: WeTravelBearerToken, orgId?: string | null): Promise<void> {
         const metadata = {
             ...(token.metadata || {}),
             token_type: token.token_type || 'Bearer'
@@ -121,6 +121,15 @@ export class WeTravelTokenManager {
         }
 
         await this.integrationDataService.saveIntegrationConfig(update);
+
+        // WeTravel rotates the refresh token on every exchange; persist it as the new seed
+        // so the next refresh doesn't reuse an already-consumed token and get a 403.
+        if (token.refresh_token) {
+            await this.integrationDataService.saveWeTravelCredentials(
+                { apiKey: token.refresh_token, orgId: orgId ?? null },
+                'connected'
+            );
+        }
     }
 
     private isExpiringSoon(expiresAt: Date): boolean {
