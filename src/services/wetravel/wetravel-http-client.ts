@@ -1,4 +1,5 @@
 import type { WeTravelTokenManager } from '../integrations/wetravel-token-manager';
+import { wetravelFetch } from '../integrations/wetravel-fetch';
 import type { WeTravelApiClient, WeTravelTrip, WeTravelBooking } from './wetravel-historic-contact-sync-service';
 import type { WeTravelPagination, WeTravelTripBookingsPage, WeTravelTripBookingResponse } from '../../types/wetravel';
 
@@ -35,7 +36,7 @@ export class WeTravelHttpClient implements WeTravelApiClient {
 
         console.log('Fetching WeTravel trips from:', url);
 
-        const response = await fetch(url, {
+        const response = await wetravelFetch(url, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -95,7 +96,7 @@ export class WeTravelHttpClient implements WeTravelApiClient {
         console.log('Fetching WeTravel leads from:', url);
         console.log('Request body:', JSON.stringify(body));
         
-        const response = await fetch(url, {
+        const response = await wetravelFetch(url, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -151,7 +152,7 @@ export class WeTravelHttpClient implements WeTravelApiClient {
 
             console.log('Fetching WeTravel trip bookings from:', url);
 
-            const response = await fetch(url, {
+            const response = await wetravelFetch(url, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -191,7 +192,7 @@ export class WeTravelHttpClient implements WeTravelApiClient {
 
         console.log('Fetching WeTravel trip buyer booking details from:', url);
 
-        const response = await fetch(url, {
+        const response = await wetravelFetch(url, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -477,7 +478,7 @@ export class WeTravelHttpClient implements WeTravelApiClient {
 
         console.log('Fetching WeTravel trip detail from:', url);
 
-        const response = await fetch(url, {
+        const response = await wetravelFetch(url, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,

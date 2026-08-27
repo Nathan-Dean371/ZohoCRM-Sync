@@ -42,6 +42,28 @@ describe('WeTravelHttpClient - Endpoint Integration', () => {
             );
         });
 
+        test('routes requests through a proxy dispatcher when WEBSHARE_URL is configured', async () => {
+            process.env.WEBSHARE_URL = 'http://proxy.example:8080';
+            const proxiedClient = new WeTravelHttpClient(mockTokenManager);
+
+            (global.fetch as jest.Mock).mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: async () => []
+            });
+
+            await proxiedClient.fetchTrips();
+
+            expect(global.fetch).toHaveBeenCalledWith(
+                'https://api.wetravel.com/v2/draft_trips',
+                expect.objectContaining({
+                    dispatcher: expect.any(Object)
+                })
+            );
+
+            delete process.env.WEBSHARE_URL;
+        });
+
         test('normalizes API response with id and title fields to uuid and name', async () => {
             const apiResponse = [
                 {

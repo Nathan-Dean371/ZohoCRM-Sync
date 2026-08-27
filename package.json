@@ -18,7 +18,6 @@
     "reconcile:wetravel": "ts-node src/scripts/reconcile-wetravel-idempotency.ts",
     "dev:tunnel": "concurrently \"npm run dev\" \"npm run tunnel\"",
     "postinstall": "prisma generate"
-
   },
   "keywords": [],
   "author": "",
@@ -45,6 +44,7 @@
     "nodemailer": "^6.10.0",
     "nodemon": "^3.1.9",
     "prettier": "^3.4.2",
+    "undici": "^7.29.0",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

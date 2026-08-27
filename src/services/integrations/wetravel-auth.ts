@@ -1,4 +1,5 @@
 import { URLSearchParams } from 'url';
+import { wetravelFetch } from './wetravel-fetch';
 
 export interface WeTravelBearerToken {
     access_token: string;
@@ -29,7 +30,7 @@ export class WeTravelAuthService implements WeTravelAuthClient {
     }
 
     async exchangeBearerToken(seedToken: string, orgId?: string): Promise<WeTravelBearerToken> {
-        const response = await fetch(this.tokenEndpoint, {
+        const response = await wetravelFetch(this.tokenEndpoint, {
             method: 'POST',
             headers: {
                 Accept: 'application/json',

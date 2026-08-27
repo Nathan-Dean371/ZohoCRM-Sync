@@ -1,3 +1,5 @@
+import { wetravelFetch } from './wetravel-fetch';
+
 /**
  * WeTravel credential validator
  * 
@@ -87,7 +89,7 @@ export class WeTravelValidator implements WeTravelApiClient {
         const requestUrl = `${this.apiBaseUrl}${this.accessTokenPath}`;
 
         try {
-            const response = await fetch(requestUrl, {
+            const response = await wetravelFetch(requestUrl, {
                 method: 'POST',
                 headers: {
                     accept: 'application/json',
@@ -95,8 +97,8 @@ export class WeTravelValidator implements WeTravelApiClient {
                     'User-Agent': 'OCTOtoCRM-Integration/1.0 (+https://octotocrm-production.up.railway.app)',
                     Authorization: `Bearer ${apiKey}`
                 },
-                timeout: 5000
-            } as any);
+                signal: AbortSignal.timeout(5000)
+            } as RequestInit);
 
             if (response.status === 401 || response.status === 403) {
                 return {
@@ -148,7 +150,7 @@ export class WeTravelValidator implements WeTravelApiClient {
         const requestUrl = `${this.apiBaseUrl}${this.paymentLinksPath}?per_page=1&page=1&publish_status=published`;
 
         try {
-            const response = await fetch(requestUrl, {
+            const response = await wetravelFetch(requestUrl, {
                 method: 'GET',
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
@@ -156,8 +158,8 @@ export class WeTravelValidator implements WeTravelApiClient {
                     'Accept-Encoding': 'gzip, deflate, br',
                     'User-Agent': 'OCTOtoCRM-Integration/1.0 (+https://octotocrm-production.up.railway.app)'
                 },
-                timeout: 5000
-            } as any);
+                signal: AbortSignal.timeout(5000)
+            } as RequestInit);
 
             if (response.status === 401 || response.status === 403) {
                 return {
