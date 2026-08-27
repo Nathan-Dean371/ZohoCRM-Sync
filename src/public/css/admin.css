@@ -33,11 +33,18 @@
 
 .adminDashboardContainer
 {
+    position: relative;
+    isolation: isolate;
     display: flex;
     flex-direction: column;
     justify-content: space-evenly;
     align-items: center;
     
+}
+
+.adminDashboardContainer > * {
+    position: relative;
+    z-index: 1;
 }
 
 body

@@ -146,6 +146,43 @@ describe('ZohoCRMService', () => {
                 expect.any(Object)
             );
         });
+
+        test('reuses a contact when a concurrent create returns duplicate data', async () => {
+            const testContact = {
+                First_Name: 'Nathan',
+                Last_Name: 'Dean',
+                Email: 'nathan@example.com'
+            };
+
+            (crmService as any).client.get
+                .mockResolvedValueOnce({ data: { data: [] } })
+                .mockResolvedValueOnce({
+                    data: {
+                        data: [{
+                            id: 'existing-contact-id',
+                            First_Name: 'Nathan',
+                            Last_Name: 'Dean',
+                            Email: 'nathan@example.com'
+                        }]
+                    }
+                });
+            (crmService as any).client.post.mockRejectedValue(
+                new Error('Invalid data: {"data":[{"code":"DUPLICATE_DATA"}]}')
+            );
+            (crmService as any).client.put.mockResolvedValue({
+                data: { data: [{ code: 'SUCCESS', details: { id: 'existing-contact-id' } }] }
+            });
+
+            const result = await crmService.upsertContact(testContact);
+
+            expect(result.id).toBe('existing-contact-id');
+            expect((crmService as any).client.post).toHaveBeenCalledTimes(1);
+            expect((crmService as any).client.put).toHaveBeenCalledWith(
+                '/Contacts/existing-contact-id',
+                expect.any(Object),
+                expect.any(Object)
+            );
+        });
     });
 
     describe('Booking Operations', () => {

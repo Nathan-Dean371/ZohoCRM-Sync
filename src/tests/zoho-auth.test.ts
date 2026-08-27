@@ -23,6 +23,17 @@ describe('ZohoAuthService', () => {
         expect(authUrl).toContain('access_type=offline');
     });
 
+    test('normalizes redirect URI when protocol is missing', () => {
+        process.env.ZOHO_REDIRECT_URI = 'octotocrm-production.up.railway.app/admin/dashboard/integrations/zoho/callback';
+
+        const authService = new ZohoAuthService();
+        const authUrl = authService.getAuthorizationUrl();
+
+        expect(authUrl).toContain(
+            'redirect_uri=https%3A%2F%2Foctotocrm-production.up.railway.app%2Fadmin%2Fdashboard%2Fintegrations%2Fzoho%2Fcallback'
+        );
+    });
+
     test('exchanges authorization code for tokens', async () => {
         const authService = new ZohoAuthService();
         mockedAxios.post.mockResolvedValue({

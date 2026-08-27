@@ -277,11 +277,32 @@ class ZohoCRMService {
                 });
             }
 
-            return await this.createContact(contact);
+            try {
+                return await this.createContact(contact);
+            } catch (error) {
+                if (!emailForSearch || !this.isDuplicateContactError(error)) {
+                    throw error;
+                }
+
+                const duplicateContact = await this.findContactByEmail(emailForSearch);
+                if (!duplicateContact?.id) {
+                    throw error;
+                }
+
+                return await this.updateContact(duplicateContact.id, {
+                    ...duplicateContact,
+                    ...contact
+                });
+            }
         } catch (error) {
             console.error('Failed to upsert contact:', error);
             throw error;
         }
+    }
+
+    private isDuplicateContactError(error: unknown): boolean {
+        return error instanceof Error
+            && /(duplicate_data|duplicate data|already exists)/i.test(error.message);
     }
 
     private async updateContact(id: string, contact: Partial<ZohoContact>): Promise<ZohoContact> {

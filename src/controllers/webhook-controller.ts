@@ -105,8 +105,9 @@ export const processWeTravelWebhook: RequestHandler = async (req, res) => {
         return;
     }
 
-    // Validate Svix HMAC signature
-    const bodyJson = JSON.stringify(req.body);
+    // Svix signs the exact request bytes, not a re-serialized parsed object.
+    const bodyJson = (req as Request & { rawBody?: Buffer }).rawBody?.toString('utf-8')
+        || JSON.stringify(req.body);
     const signedContent = `${svixId}.${svixTimestamp}.${bodyJson}`;
 
     // Svix secrets are prefixed with "whsec_".

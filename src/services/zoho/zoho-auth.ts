@@ -18,15 +18,34 @@ class ZohoAuthService {
 
     constructor() {
         // Get required environment variables
-        this.clientId = process.env.ZOHO_CLIENT_ID || '';
-        this.clientSecret = process.env.ZOHO_CLIENT_SECRET || '';
-        this.redirectUri = process.env.ZOHO_REDIRECT_URI || '';
-        this.accountsUrl = process.env.ZOHO_DOMAIN || 'https://accounts.zoho.com';
+        this.clientId = (process.env.ZOHO_CLIENT_ID || '').trim();
+        this.clientSecret = (process.env.ZOHO_CLIENT_SECRET || '').trim();
+        this.redirectUri = this.normalizeUrl(process.env.ZOHO_REDIRECT_URI || '');
+        this.accountsUrl = this.normalizeBaseUrl(process.env.ZOHO_DOMAIN || 'https://accounts.zoho.com');
 
         // Validate required configuration for basic operation
         if (!this.clientId || !this.clientSecret) {
             console.warn('Missing Zoho CLIENT_ID or CLIENT_SECRET');
         }
+    }
+
+    private normalizeUrl(value: string): string {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+
+        if (/^https?:\/\//i.test(trimmed)) {
+            return trimmed;
+        }
+
+        if (/^localhost[:/]/i.test(trimmed) || /^127\.0\.0\.1[:/]/i.test(trimmed)) {
+            return `http://${trimmed}`;
+        }
+
+        return `https://${trimmed}`;
+    }
+
+    private normalizeBaseUrl(value: string): string {
+        return this.normalizeUrl(value).replace(/\/+$/, '');
     }
 
     getAuthorizationUrl(): string {
@@ -36,7 +55,16 @@ class ZohoAuthService {
             'ZohoCRM.settings.ALL'
         ].join(',');
 
-        return `${this.accountsUrl}/oauth/v2/auth?scope=${scopes}&client_id=${this.clientId}&response_type=code&access_type=offline&redirect_uri=${this.redirectUri}&prompt=consent`;
+        const params = new URLSearchParams({
+            scope: scopes,
+            client_id: this.clientId,
+            response_type: 'code',
+            access_type: 'offline',
+            redirect_uri: this.redirectUri,
+            prompt: 'consent'
+        });
+
+        return `${this.accountsUrl}/oauth/v2/auth?${params.toString()}`;
     }
 
     async exchangeCodeForTokens(code: string): Promise<ZohoToken> {
