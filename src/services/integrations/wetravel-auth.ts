@@ -33,6 +33,8 @@ export class WeTravelAuthService implements WeTravelAuthClient {
             method: 'POST',
             headers: {
                 Accept: 'application/json',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'User-Agent': 'OCTOtoCRM-Integration/1.0 (+https://octotocrm-production.up.railway.app)',
                 Authorization: `Bearer ${seedToken}`
             }
         });

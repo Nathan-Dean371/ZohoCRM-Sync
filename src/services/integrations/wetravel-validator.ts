@@ -91,6 +91,8 @@ export class WeTravelValidator implements WeTravelApiClient {
                 method: 'POST',
                 headers: {
                     accept: 'application/json',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'User-Agent': 'OCTOtoCRM-Integration/1.0 (+https://octotocrm-production.up.railway.app)',
                     Authorization: `Bearer ${apiKey}`
                 },
                 timeout: 5000
@@ -150,7 +152,9 @@ export class WeTravelValidator implements WeTravelApiClient {
                 method: 'GET',
                 headers: {
                     Authorization: `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'User-Agent': 'OCTOtoCRM-Integration/1.0 (+https://octotocrm-production.up.railway.app)'
                 },
                 timeout: 5000
             } as any);
