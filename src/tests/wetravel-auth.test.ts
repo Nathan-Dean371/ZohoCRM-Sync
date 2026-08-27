@@ -60,4 +60,33 @@ describe('WeTravelAuthService', () => {
             })
         );
     });
+
+    it('rewrites legacy oauth/token overrides to the current v2 access-token endpoint', async () => {
+        process.env.WETRAVEL_TOKEN_URL = 'https://api.wetravel.com/oauth/token';
+
+        const authService = new WeTravelAuthService();
+
+        (global.fetch as jest.Mock).mockResolvedValueOnce({
+            ok: true,
+            json: async () => ({
+                access_token: 'bearer-token',
+                expires_in: 3600,
+                token_type: 'Bearer'
+            })
+        });
+
+        await authService.exchangeBearerToken('seed-token-123');
+
+        expect(global.fetch).toHaveBeenCalledWith(
+            'https://api.wetravel.com/v2/auth/tokens/access',
+            expect.objectContaining({
+                method: 'POST',
+                headers: expect.objectContaining({
+                    Authorization: 'Bearer seed-token-123'
+                })
+            })
+        );
+
+        delete process.env.WETRAVEL_TOKEN_URL;
+    });
 });

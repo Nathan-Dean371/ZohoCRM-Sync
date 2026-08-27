@@ -26,7 +26,9 @@ export class WeTravelAuthService implements WeTravelAuthClient {
         const configuredBaseUrl = options.apiBaseUrl || process.env.WETRAVEL_API_BASE_URL || 'https://api.wetravel.com/v2';
         this.apiBaseUrl = this.normalizeApiBaseUrl(configuredBaseUrl);
         // Use v2 auth/tokens/access endpoint by default per WeTravel v2 docs.
-        this.tokenEndpoint = options.tokenEndpoint || process.env.WETRAVEL_TOKEN_URL || `${this.apiBaseUrl}/auth/tokens/access`;
+        this.tokenEndpoint = this.normalizeTokenEndpoint(
+            options.tokenEndpoint || process.env.WETRAVEL_TOKEN_URL || `${this.apiBaseUrl}/auth/tokens/access`
+        );
     }
 
     async exchangeBearerToken(seedToken: string, orgId?: string): Promise<WeTravelBearerToken> {
@@ -123,6 +125,23 @@ export class WeTravelAuthService implements WeTravelAuthClient {
             console.warn('Failed to decode JWT:', error);
             return {};
         }
+    }
+
+    private normalizeTokenEndpoint(tokenEndpoint: string): string {
+        const trimmed = tokenEndpoint.trim().replace(/\/$/, '');
+
+        if (!trimmed) {
+            return `${this.apiBaseUrl}/auth/tokens/access`;
+        }
+
+        if (trimmed.includes('/oauth/token')) {
+            const url = new URL(trimmed);
+            const path = url.pathname.replace(/\/oauth\/token$/, '');
+            url.pathname = `${path}/v2/auth/tokens/access`;
+            return url.toString();
+        }
+
+        return trimmed;
     }
 
     private normalizeApiBaseUrl(apiBaseUrl: string): string {
