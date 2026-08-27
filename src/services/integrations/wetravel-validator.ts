@@ -15,6 +15,8 @@ export interface WeTravelValidationResult {
     isValid: boolean;
     status: 'connected' | 'invalid_key' | 'no_pro' | 'not_main_account' | 'permission_denied' | 'network_error' | 'unknown_error';
     errorMessage?: string;
+    // WeTravel rotates the refresh token on every exchange; callers must persist this instead of the original seed.
+    rotatedRefreshToken?: string;
 }
 
 export interface WeTravelApiClient {
@@ -55,7 +57,8 @@ export class WeTravelValidator implements WeTravelApiClient {
 
         return {
             isValid: true,
-            status: 'connected'
+            status: 'connected',
+            rotatedRefreshToken: accessTokenResult.refreshToken
         };
     }
 
@@ -80,7 +83,7 @@ export class WeTravelValidator implements WeTravelApiClient {
         return { isValid: true, status: 'connected' };
     }
 
-    private async issueAccessToken(apiKey: string): Promise<WeTravelValidationResult & { accessToken?: string }> {
+    private async issueAccessToken(apiKey: string): Promise<WeTravelValidationResult & { accessToken?: string; refreshToken?: string }> {
         const requestUrl = `${this.apiBaseUrl}${this.accessTokenPath}`;
 
         try {
@@ -114,7 +117,7 @@ export class WeTravelValidator implements WeTravelApiClient {
                 };
             }
 
-            const payload = await response.json() as { access_token?: string };
+            const payload = await response.json() as { access_token?: string; refresh_token?: string };
 
             if (!payload.access_token) {
                 return {
@@ -124,7 +127,7 @@ export class WeTravelValidator implements WeTravelApiClient {
                 };
             }
 
-            return { isValid: true, status: 'connected', accessToken: payload.access_token };
+            return { isValid: true, status: 'connected', accessToken: payload.access_token, refreshToken: payload.refresh_token };
         } catch (error) {
             console.error('WeTravel auth exchange errored', {
                 requestUrl,

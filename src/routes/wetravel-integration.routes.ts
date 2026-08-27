@@ -110,10 +110,12 @@ router.post('/admin/integrations/wetravel/save', async (req: Request, res: Respo
             return;
         }
 
-        // Save the validated credentials
+        // Validation already exchanged the seed key with WeTravel, which rotates the refresh
+        // token on every exchange and invalidates the original. Persist the rotated token
+        // (if returned) instead of the now-consumed original apiKey.
         await integrationDataService.saveWeTravelCredentials(
             {
-                apiKey: apiKey.trim(),
+                apiKey: validationResult.rotatedRefreshToken || apiKey.trim(),
                 orgId: normalizedOrgId || undefined
             },
             'connected'
