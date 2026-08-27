@@ -168,20 +168,52 @@ class ZohoCRMService {
             console.log('Checking for existing booking with ref:', booking.Booking_Ref);
             const existingBooking = await this.findBookingByRef(booking.Booking_Ref);
 
+            let result: ZohoVentrataBooking;
             if (existingBooking) {
                 console.log('Found existing booking:', {
                     id: existingBooking.id,
                     ref: existingBooking.Booking_Ref
                 });
 
-                return await this.updateBooking(existingBooking.id!, booking);
+                result = await this.updateBooking(existingBooking.id!, booking);
+            } else {
+                console.log('No existing booking found, creating new booking');
+                result = await this.createBooking(booking);
             }
 
-            console.log('No existing booking found, creating new booking');
-            return await this.createBooking(booking);
+            if (result.Contact_Id) {
+                await this.refreshContactBookingCount(result.Contact_Id);
+            }
+
+            return result;
         } catch (error) {
             console.error('Failed to upsert booking:', error);
             throw error;
+        }
+    }
+
+    // Recomputes the count from Zoho on every create/update so it never drifts; best-effort and must not block booking sync.
+    private async refreshContactBookingCount(contactId: string): Promise<void> {
+        try {
+            await this.tokenManager.withZohoToken(async (token) => {
+                const searchResponse = await this.client.get('/Bookings/search', {
+                    params: {
+                        criteria: `(Contact_Id:equals:${contactId})`,
+                        per_page: 200
+                    },
+                    headers: { 'Authorization': `Zoho-oauthtoken ${token}` }
+                });
+
+                const count = searchResponse.data?.data?.length ?? 0;
+
+                await this.client.put(
+                    `/Contacts/${contactId}`,
+                    { data: [{ Booking_Count: count }] },
+                    { headers: { 'Authorization': `Zoho-oauthtoken ${token}` } }
+                );
+            });
+        } catch (error) {
+            console.error(`Failed to refresh Booking_Count for contact ${contactId}:`, error);
         }
     }
 

@@ -252,5 +252,42 @@ describe('ZohoCRMService', () => {
                 expect.any(Object)
             );
         });
+
+        test('recomputes Booking_Count on the contact after create and after update', async () => {
+            const testBooking = {
+                Booking_Ref: 'NEW-REF',
+                Name: 'New Booking',
+                Contact_Id: '123',
+                Product: 'Product',
+                Travel_Date: '2022-01-01',
+                Booking_Date: '2021-12-31'
+            };
+
+            // findBookingByRef -> no existing booking, then Bookings/search count query returns 2 bookings
+            (crmService as any).client.get
+                .mockResolvedValueOnce({ data: { data: [] } })
+                .mockResolvedValueOnce({ data: { data: [{ id: 'b1' }, { id: 'b2' }] } });
+
+            (crmService as any).client.post.mockResolvedValue({
+                data: { data: [{ code: 'SUCCESS', details: { id: 'BOOKING-NEW' } }] }
+            });
+            (crmService as any).client.put.mockResolvedValue({
+                data: { data: [{ code: 'SUCCESS', details: { id: '123' } }] }
+            });
+
+            await crmService.upsertBooking(testBooking as any);
+
+            expect((crmService as any).client.get).toHaveBeenCalledWith(
+                '/Bookings/search',
+                expect.objectContaining({
+                    params: expect.objectContaining({ criteria: '(Contact_Id:equals:123)' })
+                })
+            );
+            expect((crmService as any).client.put).toHaveBeenCalledWith(
+                '/Contacts/123',
+                { data: [{ Booking_Count: 2 }] },
+                expect.any(Object)
+            );
+        });
     });
 });
