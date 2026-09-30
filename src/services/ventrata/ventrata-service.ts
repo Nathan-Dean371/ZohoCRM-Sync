@@ -138,10 +138,7 @@ class VentrataService {
                 throw new Error('At least one filter parameter is required');
             }
 
-            const headers = {
-                ...this.getHeaders(),
-                'Octo-Capabilities': 'octo/booking'
-            };
+            const headers = this.getHeaders();
 
             const response = await axios.get(`${this.baseUrl}/bookings`, {
                 headers,
