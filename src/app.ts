@@ -19,6 +19,7 @@ import session from 'express-session';
 import { User } from './types/users';
 import { create } from 'domain';
 import wetravelIntegrationRoutes from './routes/wetravel-integration.routes';
+import ventrataIntegrationRoutes from './routes/ventrata-integration.routes';
 import wetravelSyncRoutes from './routes/wetravel-sync.routes';
 import ZohoAuthService from './services/zoho/zoho-auth';
 import { integrationDataService } from './services/integrations/integration-config-service';
@@ -67,6 +68,7 @@ app.use('/api/', apiKeyRoute)
 app.use('/api', webhookRoutes);
 app.use('/admin/api/wetravel', wetravelSyncRoutes);
 app.use('/', wetravelIntegrationRoutes);
+app.use('/', ventrataIntegrationRoutes);
 app.post('/api/:id/webhook', (req: Request, res: Response) => {
   console.log("Received webhook");
   res.status(200).send("Webhook received from tunnel " + req.params.id);
@@ -148,7 +150,10 @@ function EnableMiddleware(app: express.Express) {
 function EnableAuthMiddleware(app: express.Express) {
   // Mount the webhook route BEFORE auth middleware to exempt it from X-API-Key requirement
   // It has its own X-Webhook-Secret validation in the controller
+  // Exempt webhook and admin integration routes from X-API-Key requirement
   app.use('/api', webhookRoutes);
+  app.use('/api/integrations/ventrata', userAuthMiddleware);
+  app.use('/', ventrataIntegrationRoutes);
 
   app.use('/api', authMiddleware);
   app.use('/', userAuthMiddleware);
@@ -354,6 +359,36 @@ function AddAdminRoutes(app: express.Express) {
     } catch (error) {
       console.error('Error loading WeTravel integration status:', error);
       res.status(500).render('error', { title: 'Error', message: 'Error loading WeTravel integration status', user: req.user });
+    } 
+  });
+
+
+
+  app.get('/admin/dashboard/integrations/ventrata', async (req: Request, res: Response) => {
+    try {
+      const isConnected = !!process.env.VENTRATA_API_KEY;
+      const host = req.get('host') || 'localhost:3000';
+      const protocol = req.protocol || 'http';
+      const webhookUrl = process.env.VENTRATA_WEBHOOK_URL || `${protocol}://${host}/api/webhook/ventrata`;
+
+      const companyId = (req.user as any)?.company_id;
+      let latestJob = null;
+      if (companyId) {
+        const { VentrataHistoricBookingSyncService } = await import('./services/ventrata/ventrata-historic-booking-sync-service');
+        const syncService = new VentrataHistoricBookingSyncService();
+        latestJob = await syncService.getLatestImportJob(companyId);
+      }
+
+      res.render('admin-ventrata-integration', {
+        title: 'Ventrata Integration',
+        user: req.user,
+        isConnected,
+        webhookUrl,
+        latestJob
+      });
+    } catch (error) {
+      console.error('Error loading Ventrata integration status:', error);
+      res.status(500).render('error', { title: 'Error', message: 'Error loading Ventrata integration status', user: req.user });
     }
   });
 

@@ -7,6 +7,7 @@ export interface ZohoContact {
     Phone?: string | null;
     Mobile?: string | null;   // Added for mobile numbers
     Country?: string | null;
+    Marketing_Consent?: boolean | null;
     Owner?: {                 // System field for record ownership
         id: string;
         name?: string;
@@ -29,6 +30,7 @@ export interface ZohoVentrataBooking {
     Currency?: string;
     Booking_Status?: string;
     Status?: string;
+    Booking_Source?: string;
 }
 
 // Interface for the specific structure Zoho returns when creating/updating records

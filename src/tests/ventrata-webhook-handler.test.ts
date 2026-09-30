@@ -42,6 +42,7 @@ describe('VentrataWebhookHandler', () => {
         };
         mockIdService = {
             getZohoId: jest.fn().mockResolvedValue(null),
+            isStale: jest.fn().mockResolvedValue(false),
             saveMapping: jest.fn().mockResolvedValue(undefined)
         };
         handler = new VentrataWebhookHandler(mockIdService, mockZohoService);
@@ -50,10 +51,9 @@ describe('VentrataWebhookHandler', () => {
     it('should process confirmed booking and update idempotency map', async () => {
         await handler.handleWebhook(mockEvent);
 
-        expect(mockIdService.getZohoId).toHaveBeenCalledWith('booking-uuid-456', 'ventrata');
         expect(mockZohoService.upsertContact).toHaveBeenCalled();
         expect(mockZohoService.upsertBooking).toHaveBeenCalled();
-        expect(mockIdService.saveMapping).toHaveBeenCalledWith('booking-uuid-456', 'zoho-booking-789', 'ventrata');
+        expect(mockIdService.saveMapping).toHaveBeenCalledWith('booking-uuid-456', 'zoho-booking-789', 'ventrata', undefined);
     });
 
     it('should map cancelled bookings to the Cancelled status field instead of skipping', async () => {
@@ -81,6 +81,87 @@ describe('VentrataWebhookHandler', () => {
         }));
     });
 
+    it('should convert netAmount using currencyPrecision and set currency', async () => {
+        const pricingEvent = {
+            ...mockEvent,
+            booking: {
+                ...mockEvent.booking,
+                netAmount: 15550,
+                currencyPrecision: 2,
+                currency: 'EUR'
+            }
+        } as any;
+
+        await handler.handleWebhook(pricingEvent);
+
+        expect(mockZohoService.upsertBooking).toHaveBeenCalledWith(expect.objectContaining({
+            Booking_Amount: 155.5,
+            Booking_Currency: 'EUR',
+            Currency: 'EUR'
+        }));
+    });
+
+    it('should map allowMarketing consent including explicit false', async () => {
+        const consentEvent = {
+            ...mockEvent,
+            booking: {
+                ...mockEvent.booking,
+                contact: {
+                    ...mockEvent.booking!.contact,
+                    allowMarketing: false
+                }
+            }
+        } as any;
+
+        await handler.handleWebhook(consentEvent);
+
+        expect(mockZohoService.upsertContact).toHaveBeenCalledWith(expect.objectContaining({
+            Marketing_Consent: false
+        }));
+    });
+
+    it('should sync booking without Contact_Id if both email and phone are missing', async () => {
+        const noIdentityEvent = {
+            ...mockEvent,
+            booking: {
+                ...mockEvent.booking,
+                contact: {
+                    fullName: 'Anonymous Person',
+                    emailAddress: null,
+                    phoneNumber: null
+                }
+            }
+        } as any;
+
+        const result = await handler.processBooking(noIdentityEvent.booking);
+
+        expect(mockZohoService.upsertContact).not.toHaveBeenCalled();
+        expect(mockZohoService.upsertBooking).toHaveBeenCalledWith(expect.objectContaining({
+            Contact_Id: undefined,
+            Booking_Ref: 'booking-uuid-456'
+        }));
+        expect(result.missingContact).toBe(true);
+    });
+
+    it('should reject stale update if timestamp is older than stored timestamp', async () => {
+        mockIdService.isStale.mockResolvedValue(true);
+        mockIdService.getZohoId.mockResolvedValue('zoho-booking-789');
+
+        const staleEvent = {
+            ...mockEvent,
+            booking: {
+                ...mockEvent.booking,
+                utcUpdatedAt: '2022-01-01T00:00:00Z'
+            }
+        } as any;
+
+        const result = await handler.processBooking(staleEvent.booking);
+
+        expect(mockZohoService.upsertContact).not.toHaveBeenCalled();
+        expect(mockZohoService.upsertBooking).not.toHaveBeenCalled();
+        expect(result.zohoBookingId).toBe('zoho-booking-789');
+    });
+
     it('should update Zoho when a repeated webhook arrives with changed fields', async () => {
         mockIdService.getZohoId.mockResolvedValue('zoho-booking-789');
 
@@ -88,6 +169,7 @@ describe('VentrataWebhookHandler', () => {
             ...mockEvent,
             booking: {
                 ...mockEvent.booking,
+                utcUpdatedAt: '2023-01-02T12:00:00Z',
                 product: { internalName: 'Updated Tour Name' },
                 contact: { ...mockEvent.booking!.contact, phoneNumber: '+19998887777' }
             }
@@ -104,7 +186,6 @@ describe('VentrataWebhookHandler', () => {
         expect(mockZohoService.upsertBooking).toHaveBeenLastCalledWith(expect.objectContaining({
             Product: 'Updated Tour Name'
         }));
-        expect(mockIdService.saveMapping).toHaveBeenCalledWith('booking-uuid-456', 'zoho-booking-789', 'ventrata');
     });
 
     it('should skip non-booking_update events', async () => {

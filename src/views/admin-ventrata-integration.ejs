@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ventrata Integration</title>
+    <link rel="stylesheet" href="/css/home.css">
+    <link rel="stylesheet" href="/css/admin.css">
+    <style>
+        main {
+            height: auto;
+            min-height: 100vh;
+            padding: 2rem 0;
+            align-items: flex-start;
+            overflow-y: auto;
+        }
+
+        body {
+            overflow: auto;
+        }
+
+        .ventrata-shell {
+            max-width: 1400px;
+            width: calc(100% - 2rem);
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .ventrata-card {
+            padding: 1.5rem;
+            min-height: 100%;
+        }
+
+        .ventrata-hero {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .ventrata-badge {
+            display: inline-flex;
+            align-items: center;
+            width: fit-content;
+            padding: 0.4rem 0.8rem;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.18);
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .tone-success { background: rgba(76, 175, 80, 0.16); color: #d8f5db; }
+        .tone-warning { background: rgba(255, 193, 7, 0.16); color: #fff2bf; }
+        .tone-danger { background: rgba(244, 67, 54, 0.16); color: #ffd3cf; }
+
+        .ventrata-note {
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            background: rgba(17, 157, 164, 0.14);
+            border: 1px solid rgba(17, 157, 164, 0.35);
+            color: #eefdfd;
+        }
+
+        .ventrata-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .fieldLabel {
+            display: block;
+            margin-bottom: 0.35rem;
+            color: #f7fbfb;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .fieldInput {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(255,255,255,0.08);
+            color: #ffffff;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .fieldInput::placeholder {
+            color: rgba(255,255,255,0.56);
+        }
+
+        .helperText {
+            margin-top: 0.35rem;
+            color: rgba(255,255,255,0.72);
+            font-size: 0.88rem;
+            line-height: 1.45;
+        }
+
+        .buttonRow {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .actionButton {
+            appearance: none;
+            border: 0;
+            border-radius: 12px;
+            padding: 0.95rem 1.1rem;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            color: #041013;
+            background: linear-gradient(135deg, #e7ffff 0%, #a7f3f5 100%);
+        }
+
+        .actionButton.secondary {
+            color: #fff;
+            background: rgba(255,255,255,0.09);
+            border: 1px solid rgba(255,255,255,0.16);
+        }
+
+        .responseBox {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.18);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            min-height: 72px;
+            white-space: pre-wrap;
+        }
+
+        .subtle {
+            color: rgba(255,255,255,0.75);
+            line-height: 1.55;
+        }
+
+        .sync-status {
+            padding: 1rem;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-top: 1rem;
+        }
+
+        .sync-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .sync-stat:last-child {
+            border-bottom: none;
+        }
+
+        .sync-stat-label {
+            color: rgba(255,255,255,0.75);
+        }
+
+        .sync-stat-value {
+            color: #fff;
+            font-weight: 600;
+        }
+
+        @media (max-width: 1000px) {
+            .ventrata-shell {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <%- include('navbar'); -%>
+    </div>
+
+    <main>
+        <div class="ventrata-shell">
+            <!-- Connection & Webhook Setup Section -->
+            <section class="card ventrata-card">
+                <div class="ventrata-hero">
+                    <h2 style="margin: 0;">Ventrata Connection & Webhook</h2>
+                    <div class="ventrata-badge <%= isConnected ? 'tone-success' : 'tone-warning' %>">
+                        <%= isConnected ? 'API Configured' : 'API Key Missing' %>
+                    </div>
+                    <p class="subtle">
+                        Supplier connection is managed via deployment secrets (`VENTRATA_API_KEY`). Secrets are stored encrypted and never exposed in the UI.
+                    </p>
+                </div>
+
+                <div class="ventrata-note" style="margin-bottom: 1rem;">
+                    <strong>Webhook Endpoint:</strong>
+                    <div style="margin-top: 0.35rem; font-family: monospace; color: #a7f3f5; word-break: break-all;">
+                        <%= webhookUrl %>
+                    </div>
+                </div>
+
+                <div class="buttonRow">
+                    <button id="registerWebhookButton" type="button" class="actionButton">Register / Repair Webhook</button>
+                    <a class="actionButton secondary" href="/admin/dashboard" style="display:inline-flex; align-items:center; text-decoration:none;">Back to Dashboard</a>
+                </div>
+
+                <div id="webhookResponseBox" class="responseBox">Click "Register / Repair Webhook" to register or update the Ventrata webhook subscription with a secure encrypted secret.</div>
+            </section>
+
+            <!-- Bounded Travel-Date Historical Import Section -->
+            <section class="card ventrata-card">
+                <div class="ventrata-hero">
+                    <h2 style="margin: 0;">Historical Booking Import</h2>
+                    <p class="subtle">
+                        Run a durable background job to import historical bookings for a specific travel-date range into Zoho CRM.
+                    </p>
+                </div>
+
+                <div class="ventrata-grid">
+                    <div>
+                        <label class="fieldLabel" for="travelDateStart">Travel Date Start</label>
+                        <input id="travelDateStart" class="fieldInput" type="date" required>
+                    </div>
+                    <div>
+                        <label class="fieldLabel" for="travelDateEnd">Travel Date End</label>
+                        <input id="travelDateEnd" class="fieldInput" type="date" required>
+                    </div>
+                </div>
+
+                <div class="buttonRow">
+                    <button id="startImportButton" type="button" class="actionButton">Start Historical Import</button>
+                    <button id="refreshStatusButton" type="button" class="actionButton secondary">Refresh Status</button>
+                </div>
+
+                <div id="importResponseBox" class="responseBox">Select travel dates and click "Start Historical Import" to begin backfilling bookings.</div>
+
+                <div id="jobDetailsBox" class="sync-status" style="<%= latestJob ? '' : 'display: none;' %>">
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Job ID:</span>
+                        <span class="sync-stat-value" id="jobId"><%= latestJob ? latestJob.id : '-' %></span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Status:</span>
+                        <span class="sync-stat-value" id="jobStatus"><%= latestJob ? latestJob.status : '-' %></span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Travel Start:</span>
+                        <span class="sync-stat-value" id="jobTravelStart"><%= latestJob ? new Date(latestJob.travelDateStart).toLocaleDateString() : '-' %></span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Travel End:</span>
+                        <span class="sync-stat-value" id="jobTravelEnd"><%= latestJob ? new Date(latestJob.travelDateEnd).toLocaleDateString() : '-' %></span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Current Page:</span>
+                        <span class="sync-stat-value" id="jobCurrentPage"><%= latestJob ? latestJob.currentPage : '1' %></span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Bookings Processed:</span>
+                        <span class="sync-stat-value" id="jobBookingsProcessed"><%= latestJob ? latestJob.bookingsProcessed : '0' %></span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Bookings Failed:</span>
+                        <span class="sync-stat-value" id="jobBookingsFailed"><%= latestJob ? latestJob.bookingsFailed : '0' %></span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Missing Contact Count:</span>
+                        <span class="sync-stat-value" id="jobMissingContacts"><%= latestJob ? latestJob.missingContactCount : '0' %></span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Started At:</span>
+                        <span class="sync-stat-value" id="jobStartedAt"><%= latestJob ? new Date(latestJob.startedAt).toLocaleString() : '-' %></span>
+                    </div>
+                    <div class="sync-stat">
+                        <span class="sync-stat-label">Completed At:</span>
+                        <span class="sync-stat-value" id="jobCompletedAt"><%= latestJob && latestJob.completedAt ? new Date(latestJob.completedAt).toLocaleString() : '-' %></span>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        (function() {
+            const registerWebhookButton = document.getElementById('registerWebhookButton');
+            const webhookResponseBox = document.getElementById('webhookResponseBox');
+            const startImportButton = document.getElementById('startImportButton');
+            const refreshStatusButton = document.getElementById('refreshStatusButton');
+            const importResponseBox = document.getElementById('importResponseBox');
+            const jobDetailsBox = document.getElementById('jobDetailsBox');
+
+            const travelDateStart = document.getElementById('travelDateStart');
+            const travelDateEnd = document.getElementById('travelDateEnd');
+
+            // Default dates: last 30 days to today
+            const today = new Date();
+            const lastMonth = new Date();
+            lastMonth.setDate(today.getDate() - 30);
+            travelDateStart.value = lastMonth.toISOString().split('T')[0];
+            travelDateEnd.value = today.toISOString().split('T')[0];
+
+            async function postJson(url, body) {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+                if (!response.ok) throw data;
+                return data;
+            }
+
+            function renderJobStatus(job) {
+                if (!job) return;
+                jobDetailsBox.style.display = 'block';
+                document.getElementById('jobId').textContent = job.id || '-';
+                document.getElementById('jobStatus').textContent = job.status || '-';
+                document.getElementById('jobTravelStart').textContent = job.travelDateStart ? new Date(job.travelDateStart).toLocaleDateString() : '-';
+                document.getElementById('jobTravelEnd').textContent = job.travelDateEnd ? new Date(job.travelDateEnd).toLocaleDateString() : '-';
+                document.getElementById('jobCurrentPage').textContent = job.currentPage || 1;
+                document.getElementById('jobBookingsProcessed').textContent = job.bookingsProcessed || 0;
+                document.getElementById('jobBookingsFailed').textContent = job.bookingsFailed || 0;
+                document.getElementById('jobMissingContacts').textContent = job.missingContactCount || 0;
+                document.getElementById('jobStartedAt').textContent = job.startedAt ? new Date(job.startedAt).toLocaleString() : '-';
+                document.getElementById('jobCompletedAt').textContent = job.completedAt ? new Date(job.completedAt).toLocaleString() : '-';
+            }
+
+            registerWebhookButton.addEventListener('click', async () => {
+                webhookResponseBox.textContent = 'Registering webhook...';
+                try {
+                    const res = await postJson('/api/integrations/ventrata/webhook/register', {});
+                    webhookResponseBox.textContent = res.message || 'Webhook registered successfully!';
+                } catch (err) {
+                    webhookResponseBox.textContent = err && err.error ? ('Error: ' + err.error) : 'Failed to register webhook.';
+                }
+            });
+
+            startImportButton.addEventListener('click', async () => {
+                if (!travelDateStart.value || !travelDateEnd.value) {
+                    importResponseBox.textContent = 'Please select both start and end travel dates.';
+                    return;
+                }
+
+                importResponseBox.textContent = 'Starting historical import job...';
+                startImportButton.disabled = true;
+
+                try {
+                    const res = await postJson('/api/integrations/ventrata/import', {
+                        travelDateStart: travelDateStart.value,
+                        travelDateEnd: travelDateEnd.value
+                    });
+                    importResponseBox.textContent = 'Historical import job queued successfully!';
+                    renderJobStatus(res.job);
+                } catch (err) {
+                    importResponseBox.textContent = err && err.error ? ('Error: ' + err.error) : 'Failed to start import job.';
+                } finally {
+                    startImportButton.disabled = false;
+                }
+            });
+
+            refreshStatusButton.addEventListener('click', async () => {
+                importResponseBox.textContent = 'Checking latest import status...';
+                try {
+                    const response = await fetch('/api/integrations/ventrata/import/status');
+                    const data = await response.json();
+                    if (!response.ok) throw data;
+                    if (data.job) {
+                        renderJobStatus(data.job);
+                        importResponseBox.textContent = 'Status refreshed.';
+                    } else {
+                        importResponseBox.textContent = 'No import job found.';
+                    }
+                } catch (err) {
+                    importResponseBox.textContent = err && err.error ? ('Error: ' + err.error) : 'Failed to check status.';
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

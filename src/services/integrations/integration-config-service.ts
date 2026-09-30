@@ -18,6 +18,9 @@ export interface WeTravelRolloutGuard {
 export interface IntegrationConfigRecord {
     id: string;
     ventrata_webhook_secret: string | null;
+    ventrata_secret_iv: string | null;
+    ventrata_secret_auth_tag: string | null;
+    ventrata_secret_algorithm: string | null;
     zoho_refresh_token: string | null;
     access_token: string | null;
     expires_at: Date | null;
@@ -39,6 +42,9 @@ export interface IntegrationConfigRecord {
 
 export interface IntegrationConfigInput {
     ventrata_webhook_secret?: string | null;
+    ventrata_secret_iv?: string | null;
+    ventrata_secret_auth_tag?: string | null;
+    ventrata_secret_algorithm?: string | null;
     zoho_refresh_token?: string | null;
     access_token?: string | null;
     expires_at?: Date | null;
@@ -109,10 +115,40 @@ export function createIntegrationConfigService(store: IntegrationConfigStore) {
     return {
         getIntegrationConfig: () => store.getSingleton(),
         saveIntegrationConfig: (input: IntegrationConfigInput) => store.saveSingleton(input),
-        getVentrataWebhookSecret: async () => {
-            const integrationConfig = await store.getSingleton();
+        getVentrataWebhookSecret: async (): Promise<string | null> => {
+            const config = await store.getSingleton();
+            if (!config?.ventrata_webhook_secret) {
+                return null;
+            }
 
-            return integrationConfig?.ventrata_webhook_secret ?? null;
+            if (config.ventrata_secret_iv) {
+                try {
+                    return decryptCredential(
+                        {
+                            encryptedValue: config.ventrata_webhook_secret,
+                            iv: config.ventrata_secret_iv,
+                            authTag: config.ventrata_secret_auth_tag || '',
+                            algorithm: config.ventrata_secret_algorithm || 'aes-256-gcm'
+                        },
+                        encryptionKey
+                    );
+                } catch (error) {
+                    console.error('Failed to decrypt Ventrata webhook secret:', error);
+                    return config.ventrata_webhook_secret;
+                }
+            }
+
+            return config.ventrata_webhook_secret;
+        },
+        saveVentrataWebhookSecret: async (secret: string) => {
+            const encrypted = encryptCredential(secret, encryptionKey);
+
+            return store.saveSingleton({
+                ventrata_webhook_secret: encrypted.encryptedValue,
+                ventrata_secret_iv: encrypted.iv,
+                ventrata_secret_auth_tag: encrypted.authTag,
+                ventrata_secret_algorithm: encrypted.algorithm
+            });
         },
         // WeTravel credential methods
         getWeTravelCredentials: async (): Promise<WeTravelCredentials | null> => {
@@ -211,10 +247,40 @@ export function createIntegrationDataService(store: IntegrationDataStore) {
     return {
         getIntegrationConfig: () => store.getSingleton(),
         saveIntegrationConfig: (input: IntegrationConfigInput) => store.saveSingleton(input),
-        getVentrataWebhookSecret: async () => {
-            const integrationConfig = await store.getSingleton();
+        getVentrataWebhookSecret: async (): Promise<string | null> => {
+            const config = await store.getSingleton();
+            if (!config?.ventrata_webhook_secret) {
+                return null;
+            }
 
-            return integrationConfig?.ventrata_webhook_secret ?? null;
+            if (config.ventrata_secret_iv) {
+                try {
+                    return decryptCredential(
+                        {
+                            encryptedValue: config.ventrata_webhook_secret,
+                            iv: config.ventrata_secret_iv,
+                            authTag: config.ventrata_secret_auth_tag || '',
+                            algorithm: config.ventrata_secret_algorithm || 'aes-256-gcm'
+                        },
+                        encryptionKey
+                    );
+                } catch (error) {
+                    console.error('Failed to decrypt Ventrata webhook secret:', error);
+                    return config.ventrata_webhook_secret;
+                }
+            }
+
+            return config.ventrata_webhook_secret;
+        },
+        saveVentrataWebhookSecret: async (secret: string) => {
+            const encrypted = encryptCredential(secret, encryptionKey);
+
+            return store.saveSingleton({
+                ventrata_webhook_secret: encrypted.encryptedValue,
+                ventrata_secret_iv: encrypted.iv,
+                ventrata_secret_auth_tag: encrypted.authTag,
+                ventrata_secret_algorithm: encrypted.algorithm
+            });
         },
         hasZohoRefreshToken: async () => {
             const integrationConfig = await store.getSingleton();
@@ -355,6 +421,9 @@ export function createPrismaIntegrationDataStore(prisma: PrismaLike = prismaClie
                 create: {
                     id: singletonId,
                     ventrata_webhook_secret: input.ventrata_webhook_secret ?? null,
+                    ventrata_secret_iv: input.ventrata_secret_iv ?? null,
+                    ventrata_secret_auth_tag: input.ventrata_secret_auth_tag ?? null,
+                    ventrata_secret_algorithm: input.ventrata_secret_algorithm ?? 'aes-256-gcm',
                     zoho_refresh_token: input.zoho_refresh_token ?? null,
                     access_token: input.access_token ?? null,
                     expires_at: input.expires_at ?? null,
@@ -375,6 +444,9 @@ export function createPrismaIntegrationDataStore(prisma: PrismaLike = prismaClie
                 },
                 update: {
                     ventrata_webhook_secret: input.ventrata_webhook_secret ?? existingConfig?.ventrata_webhook_secret ?? null,
+                    ventrata_secret_iv: input.ventrata_secret_iv ?? existingConfig?.ventrata_secret_iv ?? null,
+                    ventrata_secret_auth_tag: input.ventrata_secret_auth_tag ?? existingConfig?.ventrata_secret_auth_tag ?? null,
+                    ventrata_secret_algorithm: input.ventrata_secret_algorithm ?? existingConfig?.ventrata_secret_algorithm ?? 'aes-256-gcm',
                     zoho_refresh_token: input.zoho_refresh_token ?? existingConfig?.zoho_refresh_token ?? null,
                     access_token: input.access_token ?? existingConfig?.access_token ?? null,
                     expires_at: input.expires_at ?? existingConfig?.expires_at ?? null,
