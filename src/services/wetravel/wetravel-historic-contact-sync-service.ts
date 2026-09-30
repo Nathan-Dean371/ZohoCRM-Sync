@@ -1238,7 +1238,8 @@ export class WeTravelHistoricContactSyncService {
             Travel_Date: formatDateTimeForZoho(booking.travel_date),
             Booking_Date: bookingDate,
             ...(bookingAmount !== undefined ? { Booking_Amount: bookingAmount } : {}),
-            ...(bookingCurrency ? { Booking_Currency: bookingCurrency, Currency: bookingCurrency } : {})
+            ...(bookingCurrency ? { Booking_Currency: bookingCurrency, Currency: bookingCurrency } : {}),
+            Booking_Source: 'WeTravel'
         };
     }
 

@@ -215,7 +215,8 @@ describe('WeTravelHistoricContactSyncService', () => {
             expect(zohoService.upsertBooking).toHaveBeenCalledWith(
                 expect.objectContaining({
                     Booking_Ref: 'WT-OK-002',
-                    Contact_Id: 'zoho-contact-2'
+                    Contact_Id: 'zoho-contact-2',
+                    Booking_Source: 'WeTravel'
                 })
             );
             expect(result.status).toBe('completed');
