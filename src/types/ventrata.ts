@@ -35,7 +35,10 @@ interface VentrataBooking {
     
     // Additional fields
     notes: string | null;
-    deliveryMethods: string[];
+    // Pricing & Currency
+    netAmount?: number | null;
+    currency?: string | null;
+    currencyPrecision?: number | null;
 
     product: VentrataProduct;
     prodcutId: string;

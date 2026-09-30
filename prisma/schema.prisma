@@ -101,6 +101,9 @@ model tunnel_credentials {
 model IntegrationConfig {
   id                      String   @id @default("singleton") @db.VarChar(32)
   ventrata_webhook_secret String?  @db.VarChar(255)
+  ventrata_secret_iv      String?  @db.VarChar(64)
+  ventrata_secret_auth_tag String? @db.VarChar(64)
+  ventrata_secret_algorithm String? @default("aes-256-gcm") @db.VarChar(20)
   zoho_refresh_token      String?  @db.Text
   access_token            String?  @db.Text
   expires_at              DateTime? @db.Timestamptz(6)
@@ -138,16 +141,34 @@ model WebhookLog {
 }
 
 model IdempotencyMap {
-  zoho_record_id String   @db.VarChar(100)
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
-  updated_at     DateTime @default(now()) @db.Timestamptz(6)
-  source_id      String   @db.VarChar(100)
-  source_type    String   @db.VarChar(50)
-  record_type    String   @db.VarChar(20)
+  zoho_record_id   String    @db.VarChar(100)
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime  @default(now()) @db.Timestamptz(6)
+  source_id        String    @db.VarChar(100)
+  source_type      String    @db.VarChar(50)
+  record_type      String    @db.VarChar(20)
+  source_updated_at DateTime? @db.Timestamptz(6)
 
   @@id([source_id, source_type])
   @@index([zoho_record_id])
   @@map("idempotency_map")
+}
+
+model VentrataImportJob {
+  id                    String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  company_id            String    @db.Uuid
+  status                String    @db.VarChar(20) // "in_progress", "completed", "failed"
+  travel_date_start     DateTime  @db.Timestamptz(6)
+  travel_date_end       DateTime  @db.Timestamptz(6)
+  current_page          Int       @default(1)
+  bookings_processed    Int       @default(0)
+  bookings_failed       Int       @default(0)
+  missing_contact_count Int       @default(0)
+  started_at            DateTime  @default(now()) @db.Timestamptz(6)
+  completed_at          DateTime? @db.Timestamptz(6)
+  failure_details       Json?     @db.JsonB
+
+  @@map("ventrata_import_jobs")
 }
 
 model WeTravelImportJob {

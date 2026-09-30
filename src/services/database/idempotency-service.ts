@@ -2,20 +2,17 @@ import prisma from './databaseConnector';
 
 export class IdempotencyService {
     /**
-     * Gets the Zoho ID for a given external booking ID (Ventrata UUID or WeTravel reference)
-     * @param externalBookingId - The external booking ID
-     * @param sourceType - The source system (e.g., 'ventrata', 'wetravel')
+     * Gets the full idempotency mapping record for a given external booking ID
      */
-    async getZohoId(externalBookingId: string, sourceType: string = 'ventrata'): Promise<string | null> {
+    async getMapping(externalBookingId: string, sourceType: string = 'ventrata') {
         try {
-            const mapping = await prisma.idempotencyMap.findFirst({
+            return await prisma.idempotencyMap.findFirst({
                 where: {
                     source_id: externalBookingId,
                     source_type: sourceType,
                     record_type: 'booking'
                 }
             });
-            return mapping?.zoho_record_id || null;
         } catch (error) {
             console.error('Error fetching idempotency mapping:', error);
             return null;
@@ -23,13 +20,47 @@ export class IdempotencyService {
     }
 
     /**
+     * Gets the Zoho ID for a given external booking ID (Ventrata UUID or WeTravel reference)
+     * @param externalBookingId - The external booking ID
+     * @param sourceType - The source system (e.g., 'ventrata', 'wetravel')
+     */
+    async getZohoId(externalBookingId: string, sourceType: string = 'ventrata'): Promise<string | null> {
+        const mapping = await this.getMapping(externalBookingId, sourceType);
+        return mapping?.zoho_record_id || null;
+    }
+
+    /**
+     * Checks if incoming payload timestamp is stale compared to persisted source_updated_at
+     */
+    async isStale(externalBookingId: string, sourceType: string = 'ventrata', incomingUpdatedAt?: Date | string | null): Promise<boolean> {
+        if (!incomingUpdatedAt) return false;
+        const mapping = await this.getMapping(externalBookingId, sourceType);
+        if (!mapping?.source_updated_at) return false;
+
+        const incomingTime = new Date(incomingUpdatedAt).getTime();
+        const existingTime = new Date(mapping.source_updated_at).getTime();
+        if (isNaN(incomingTime) || isNaN(existingTime)) return false;
+
+        return incomingTime <= existingTime;
+    }
+
+    /**
      * Saves a mapping between an external booking ID and a Zoho Record ID
      * @param externalBookingId - Ventrata UUID or WeTravel booking reference
      * @param zohoId - Zoho CRM record ID
      * @param sourceType - The source system (e.g., 'ventrata', 'wetravel')
+     * @param sourceUpdatedAt - The source timestamp when the record was updated in Ventrata/WeTravel
      */
-    async saveMapping(externalBookingId: string, zohoId: string, sourceType: string = 'ventrata'): Promise<void> {
+    async saveMapping(
+        externalBookingId: string, 
+        zohoId: string, 
+        sourceType: string = 'ventrata',
+        sourceUpdatedAt?: Date | string | null
+    ): Promise<void> {
         try {
+            const parsedUpdatedAt = sourceUpdatedAt ? new Date(sourceUpdatedAt) : null;
+            const validUpdatedAt = parsedUpdatedAt && !isNaN(parsedUpdatedAt.getTime()) ? parsedUpdatedAt : null;
+
             // First check if it exists
             const existing = await prisma.idempotencyMap.findFirst({
                 where: {
@@ -47,6 +78,7 @@ export class IdempotencyService {
                     },
                     data: {
                         zoho_record_id: zohoId,
+                        source_updated_at: validUpdatedAt || existing.source_updated_at,
                         updated_at: new Date()
                     }
                 });
@@ -57,7 +89,8 @@ export class IdempotencyService {
                         source_id: externalBookingId,
                         source_type: sourceType,
                         record_type: 'booking',
-                        zoho_record_id: zohoId
+                        zoho_record_id: zohoId,
+                        source_updated_at: validUpdatedAt
                     }
                 });
             }

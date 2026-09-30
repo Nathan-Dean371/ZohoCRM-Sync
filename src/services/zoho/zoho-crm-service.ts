@@ -96,7 +96,8 @@ class ZohoCRMService {
                     Email: contact.Email,
                     Phone: contact.Phone,
                     Mobile: contact.Mobile,
-                    Country: contact.Country
+                    Country: contact.Country,
+                    ...(contact.Marketing_Consent !== undefined ? { Marketing_Consent: contact.Marketing_Consent } : {})
                 }]
             };
 
@@ -299,14 +300,18 @@ class ZohoCRMService {
             }
 
             if (existingContact) {
-                if(existingContact.id === undefined) {
+                if (!existingContact.id) {
                     existingContact.id = '';
                 }
                 
-                return await this.updateContact(existingContact.id, {
-                    ...existingContact,
-                    ...contact
-                });
+                const merged: Partial<ZohoContact> = { ...existingContact };
+                for (const k of Object.keys(contact) as (keyof typeof contact)[]) {
+                    if (contact[k] !== null && contact[k] !== undefined) {
+                        (merged as any)[k] = contact[k];
+                    }
+                }
+
+                return await this.updateContact(existingContact.id, merged);
             }
 
             try {
@@ -321,10 +326,14 @@ class ZohoCRMService {
                     throw error;
                 }
 
-                return await this.updateContact(duplicateContact.id, {
-                    ...duplicateContact,
-                    ...contact
-                });
+                const merged: Partial<ZohoContact> = { ...duplicateContact };
+                for (const k of Object.keys(contact) as (keyof typeof contact)[]) {
+                    if (contact[k] !== null && contact[k] !== undefined) {
+                        (merged as any)[k] = contact[k];
+                    }
+                }
+
+                return await this.updateContact(duplicateContact.id, merged);
             }
         } catch (error) {
             console.error('Failed to upsert contact:', error);
@@ -346,7 +355,7 @@ class ZohoCRMService {
             });
 
             // Create a clean contact object without undefined values
-            const contactData = {
+            const contactData: Record<string, any> = {
                 First_Name: contact.First_Name || null,
                 Last_Name: contact.Last_Name,  // Required field
                 Email: contact.Email || null,
@@ -354,6 +363,10 @@ class ZohoCRMService {
                 Mobile: contact.Mobile || null,
                 Country: contact.Country || null
             };
+
+            if (contact.Marketing_Consent !== undefined) {
+                contactData.Marketing_Consent = contact.Marketing_Consent;
+            }
 
             const response = await this.client.put<ZohoApiResponse<ZohoApiResponseData>>(
                 `/Contacts/${id}`,

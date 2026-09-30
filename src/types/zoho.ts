@@ -7,6 +7,7 @@ export interface ZohoContact {
     Phone?: string | null;
     Mobile?: string | null;   // Added for mobile numbers
     Country?: string | null;
+    Marketing_Consent?: boolean | null;
     Owner?: {                 // System field for record ownership
         id: string;
         name?: string;

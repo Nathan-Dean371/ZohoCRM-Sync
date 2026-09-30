@@ -6,12 +6,15 @@ import WeTravelWebhookHandler from './wetravel/wetravel-webhook-handler';
 import { integrationDataService } from './integrations/integration-config-service';
 import { getRedisConnectionOptions } from './redis-connection';
 
+import { VentrataHistoricBookingSyncService } from './ventrata/ventrata-historic-booking-sync-service';
+
 dotenv.config();
 
 const connection = getRedisConnectionOptions();
 
 const ventrataHandler = new VentrataWebhookHandler();
 const wetravelHandler = new WeTravelWebhookHandler();
+const ventrataHistoricSyncService = new VentrataHistoricBookingSyncService();
 
 console.log('\n🔧 Webhook Worker Configuration:', {
   redisHost: connection.host,
@@ -76,7 +79,11 @@ export const webhookWorker = new Worker(
 
     try {
       // Dispatch to specific handler based on job name
-      if (job.name === 'process-wetravel-webhook') {
+      if (job.name === 'process-ventrata-import') {
+        const { jobId } = job.data;
+        console.log(`Processing Ventrata import job ${jobId}`);
+        await ventrataHistoricSyncService.processImportJob(jobId);
+      } else if (job.name === 'process-wetravel-webhook') {
         const rolloutGuard = await integrationDataService.getWeTravelRolloutGuard();
 
         if (!rolloutGuard.enabled) {

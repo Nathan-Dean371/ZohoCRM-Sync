@@ -6,3 +6,4 @@ This directory records architectural and runtime scope decisions for the project
 
 - [ADR 0001: Remove legacy CRM providers and archive source](0001-remove-legacy-providers.md)
 - [ADR 0002: Multi-source runtime scope for Ventrata and WeTravel](0002-multisource-runtime-scope.md)
+- [ADR 0003: Ventrata booking and contact source](0003-ventrata-booking-and-contact-source.md)

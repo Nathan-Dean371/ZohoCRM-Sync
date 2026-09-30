@@ -2,7 +2,7 @@ import axios from 'axios';
 import { VentrataBooking } from '../../types/ventrata';
 import { VentrataAPIError } from '../../utils/errors';
 
-interface BookingFilters {
+export interface BookingFilters {
     resellerReference?: string;
     supplierReference?: string;
     localDate?: string;
@@ -10,18 +10,17 @@ interface BookingFilters {
     localDateEnd?: string;
     productId?: string;
     optionId?: string;
+    page?: number;
+    limit?: number;
 }
 
-class VentrataService 
-{
-    
+class VentrataService {
     private apiKey: string;
     private baseUrl: string;
 
-    constructor(apiKey : string) {
-        // Read from environment variables
-        this.apiKey = apiKey;
-        this.baseUrl = "https://api.ventrata.com/octo";
+    constructor(apiKey?: string) {
+        this.apiKey = apiKey || process.env.VENTRATA_API_KEY || '';
+        this.baseUrl = process.env.VENTRATA_BASE_URL || 'https://api.ventrata.com/octo';
 
         if (!this.apiKey) {
             throw new Error('Ventrata API key is not configured');
@@ -32,31 +31,116 @@ class VentrataService
         return {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
-            'Octo-Capabilities': 'ventrata/webhooks', 
+            'Octo-Capabilities': 'ventrata/webhooks',
         };
     }
 
-     // This method fetches bookings with optional filters
+    /**
+     * Fetches webhooks registered on Ventrata
+     */
+    async getWebhooks(): Promise<any[]> {
+        try {
+            const response = await axios.get(`${this.baseUrl}/webhooks`, {
+                headers: this.getHeaders()
+            });
+            return Array.isArray(response.data) ? response.data : [];
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.response) {
+                const errorData = error.response.data;
+                throw new VentrataAPIError(
+                    error.response.status,
+                    errorData.errorMessage || 'An error occurred with the Ventrata API',
+                    errorData.errorCode,
+                    error
+                );
+            }
+            throw new VentrataAPIError(500, 'Failed to fetch webhooks from Ventrata', 'UNKNOWN_ERROR', error);
+        }
+    }
+
+    /**
+     * Idempotently registers a booking webhook with optional X-Webhook-Secret header
+     */
+    async registerWebhook(webhookUrl: string, secret?: string): Promise<any> {
+        try {
+            const existingWebhooks = await this.getWebhooks();
+            const existing = existingWebhooks.find(w => w.url === webhookUrl);
+            if (existing) {
+                console.log(`Webhook already registered for ${webhookUrl}`);
+                return existing;
+            }
+
+            const payload: any = {
+                url: webhookUrl,
+                event: 'booking_update'
+            };
+
+            if (secret) {
+                payload.headers = {
+                    'X-Webhook-Secret': secret
+                };
+            }
+
+            const response = await axios.post(`${this.baseUrl}/webhooks`, payload, {
+                headers: this.getHeaders()
+            });
+
+            return response.data;
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.response) {
+                const errorData = error.response.data;
+                throw new VentrataAPIError(
+                    error.response.status,
+                    errorData.errorMessage || 'An error occurred with the Ventrata API',
+                    errorData.errorCode,
+                    error
+                );
+            }
+            throw new VentrataAPIError(500, 'Failed to register webhook on Ventrata', 'UNKNOWN_ERROR', error);
+        }
+    }
+
+    // Backwards compatible method name
+    async TryToCreateWebhook(webhookUrl: string, secret?: string) {
+        return this.registerWebhook(webhookUrl, secret);
+    }
+
+    async TryToDeleteWebhook(webhookId: string) {
+        try {
+            const headers = this.getHeaders();
+            const response = await axios.delete(`${this.baseUrl}/webhooks/` + webhookId, { headers });
+            return response.data;
+        } catch (error) {
+            if (axios.isAxiosError(error) && error.response) {
+                const errorData = error.response.data;
+                throw new VentrataAPIError(
+                    error.response.status,
+                    errorData.errorMessage || 'An error occurred with the Ventrata API',
+                    errorData.errorCode,
+                    error
+                );
+            }
+            throw new VentrataAPIError(500, 'Failed to delete webhook on Ventrata', 'UNKNOWN_ERROR', error);
+        }
+    }
+
+    // Fetches bookings with filters
     async getBookings(filters?: BookingFilters): Promise<VentrataBooking[]> {
         try {
-            // The documentation shows that we need at least one filter parameter
             if (!filters || Object.keys(filters).length === 0) {
                 throw new Error('At least one filter parameter is required');
             }
 
-            const headers =
-            {
+            const headers = {
                 ...this.getHeaders(),
                 'Octo-Capabilities': 'octo/booking'
-            }
+            };
 
-            // Make the API request with our filters as query parameters
             const response = await axios.get(`${this.baseUrl}/bookings`, {
-                headers: this.getHeaders(),
+                headers,
                 params: filters
             });
 
-            // Add validation to ensure we received the expected data structure
             if (!Array.isArray(response.data)) {
                 throw new VentrataAPIError(
                     500,
@@ -66,10 +150,8 @@ class VentrataService
             }
 
             return response.data;
-
         } catch (error) {
             if (axios.isAxiosError(error) && error.response) {
-                // Log the specific error information from the API
                 const errorData = error.response.data;
                 throw new VentrataAPIError(
                     error.response.status,
@@ -78,71 +160,9 @@ class VentrataService
                     error
                 );
             }
-            // Handle other types of errors
             throw new VentrataAPIError(
                 500,
                 'Failed to fetch bookings from Ventrata',
-                'UNKNOWN_ERROR',
-                error
-            );
-        }
-    }
-
-    async TryToCreateWebhook(webhookUrl : string) 
-    {    
-        try
-        {
-            const headers = this.getHeaders();
-            const response = await axios.post(`${this.baseUrl}/webhooks`, {
-                "url": webhookUrl,
-                "event": "booking_update"
-            }, { headers });
-
-            return response.data;
-        } catch (error) 
-        {
-            if (axios.isAxiosError(error) && error.response) 
-            {
-                const errorData = error.response.data;
-                throw new VentrataAPIError(
-                    error.response.status,
-                    errorData.errorMessage || 'An error occurred with the Ventrata API',
-                    errorData.errorCode,
-                    error
-                );
-            }
-            throw new VentrataAPIError(
-                500,
-                'Failed to create webhook on Ventrata',
-                'UNKNOWN_ERROR',
-                error
-            );
-        }
-    }
-
-    async TryToDeleteWebhook(webhookId : string)   
-    {
-        try
-        {
-            const headers = this.getHeaders();
-            const response = await axios.delete(`${this.baseUrl}/webhooks/` + webhookId, { headers } );
-
-            return response.data;
-        } catch (error) 
-        {
-            if (axios.isAxiosError(error) && error.response) 
-            {
-                const errorData = error.response.data;
-                throw new VentrataAPIError(
-                    error.response.status,
-                    errorData.errorMessage || 'An error occurred with the Ventrata API',
-                    errorData.errorCode,
-                    error
-                );
-            }
-            throw new VentrataAPIError(
-                500,
-                'Failed to delete webhook on Ventrata',
                 'UNKNOWN_ERROR',
                 error
             );
