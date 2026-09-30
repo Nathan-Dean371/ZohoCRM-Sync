@@ -22,6 +22,7 @@ export interface WeTravelCanonicalBooking {
     bookingDate: string;
     product: string;
     travelDate: string;
+    bookingSource: string;
 }
 
 export interface WeTravelNormalizationDiagnostics {
@@ -200,7 +201,8 @@ export class WeTravelAdapter {
             name: `Booking ${bookingReference}`,
             bookingDate,
             product: productName,
-            travelDate
+            travelDate,
+            bookingSource: "WeTravel"
         };
     }
 

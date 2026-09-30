@@ -22,6 +22,9 @@ class VentrataService {
         this.apiKey = apiKey || process.env.VENTRATA_API_KEY || '';
         this.baseUrl = process.env.VENTRATA_BASE_URL || 'https://api.ventrata.com/octo';
 
+        console.log("Ventrata Base URL:", this.baseUrl);
+        console.log("API Key loaded (first 5 chars):", this.apiKey.substring(0, 5) + "...");
+
         if (!this.apiKey) {
             throw new Error('Ventrata API key is not configured');
         }
@@ -31,7 +34,7 @@ class VentrataService {
         return {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
-            'Octo-Capabilities': 'ventrata/webhooks',
+            'Octo-Capabilities': 'octo/webhooks',
         };
     }
 
@@ -40,6 +43,9 @@ class VentrataService {
      */
     async getWebhooks(): Promise<any[]> {
         try {
+            // ADD THESE LOGS:
+            console.log(`Sending GET request to: ${this.baseUrl}/webhooks`);
+            console.log('With Headers:', this.getHeaders());
             const response = await axios.get(`${this.baseUrl}/webhooks`, {
                 headers: this.getHeaders()
             });
@@ -47,6 +53,7 @@ class VentrataService {
         } catch (error) {
             if (axios.isAxiosError(error) && error.response) {
                 const errorData = error.response.data;
+                console.log("RAW VENTRATA ERROR:", JSON.stringify(errorData, null, 2));
                 throw new VentrataAPIError(
                     error.response.status,
                     errorData.errorMessage || 'An error occurred with the Ventrata API',

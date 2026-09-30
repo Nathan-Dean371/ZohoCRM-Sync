@@ -150,7 +150,10 @@ function EnableMiddleware(app: express.Express) {
 function EnableAuthMiddleware(app: express.Express) {
   // Mount the webhook route BEFORE auth middleware to exempt it from X-API-Key requirement
   // It has its own X-Webhook-Secret validation in the controller
+  // Exempt webhook and admin integration routes from X-API-Key requirement
   app.use('/api', webhookRoutes);
+  app.use('/api/integrations/ventrata', userAuthMiddleware);
+  app.use('/', ventrataIntegrationRoutes);
 
   app.use('/api', authMiddleware);
   app.use('/', userAuthMiddleware);
@@ -356,7 +359,11 @@ function AddAdminRoutes(app: express.Express) {
     } catch (error) {
       console.error('Error loading WeTravel integration status:', error);
       res.status(500).render('error', { title: 'Error', message: 'Error loading WeTravel integration status', user: req.user });
-    }
+    } 
+  });
+
+
+
   app.get('/admin/dashboard/integrations/ventrata', async (req: Request, res: Response) => {
     try {
       const isConnected = !!process.env.VENTRATA_API_KEY;

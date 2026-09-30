@@ -97,7 +97,8 @@ class VentrataWebhookHandler {
             Status: bookingStatus,
             Booking_Amount: bookingAmount,
             Booking_Currency: currency,
-            Currency: currency
+            Currency: currency,
+            Booking_Source: "Ventrata"
         });
 
         console.log('Booking processed in Zoho:', {

@@ -30,6 +30,7 @@ export interface ZohoVentrataBooking {
     Currency?: string;
     Booking_Status?: string;
     Status?: string;
+    Booking_Source?: string;
 }
 
 // Interface for the specific structure Zoho returns when creating/updating records
