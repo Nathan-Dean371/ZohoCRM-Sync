@@ -75,6 +75,8 @@ export class VentrataHistoricBookingSyncService {
 
         const bookingDateStartStr = job.booking_date_start.toISOString().split('T')[0];
         const bookingDateEndStr = job.booking_date_end.toISOString().split('T')[0];
+        const bookingDateStart = new Date(`${bookingDateStartStr}T00:00:00.000Z`);
+        const bookingDateEnd = new Date(`${bookingDateEndStr}T23:59:59.999Z`);
 
         let currentPage = job.current_page || 1;
         let bookingsProcessed = job.bookings_processed || 0;
@@ -90,11 +92,13 @@ export class VentrataHistoricBookingSyncService {
                 let bookings = [];
                 try {
                     bookings = await this.ventrataService.getBookings({
+                        utcCreatedAtStart: bookingDateStart.toISOString(),
+                        utcCreatedAtEnd: bookingDateEnd.toISOString(),
                         page: currentPage,
-                        limit: pageSize
+                        perPage: pageSize
                     });
                 } catch (error: any) {
-                    console.error(`[Ventrata Historic Import] Error fetching page ${currentPage}:`, error);
+                    console.error(`[Ventrata Historic Import] Error fetching page ${currentPage}: ${error instanceof Error ? error.message : String(error)}`);
                     await prisma.ventrataImportJob.update({
                         where: { id: jobId },
                         data: {
@@ -128,7 +132,7 @@ export class VentrataHistoricBookingSyncService {
                 }
 
                 const bookingsInDateRange = bookings.filter(booking => {
-                    const bookingDate = booking.utcConfirmedAt?.slice(0, 10);
+                    const bookingDate = booking.utcCreatedAt?.slice(0, 10);
                     return bookingDate && bookingDate >= bookingDateStartStr && bookingDate <= bookingDateEndStr;
                 });
 
@@ -140,7 +144,7 @@ export class VentrataHistoricBookingSyncService {
                             missingContactCount++;
                         }
                     } catch (err: any) {
-                        console.error(`[Ventrata Historic Import] Failed booking ${booking.uuid}:`, err);
+                        console.error(`[Ventrata Historic Import] Failed booking ${booking.uuid}: ${err instanceof Error ? err.message : String(err)}`);
                         bookingsFailed++;
                         failureDetails.push({
                             page: currentPage,
@@ -181,7 +185,7 @@ export class VentrataHistoricBookingSyncService {
                 });
             }
         } catch (error) {
-            console.error(`[Ventrata Historic Import] Job ${jobId} failed:`, error);
+            console.error(`[Ventrata Historic Import] Job ${jobId} failed: ${error instanceof Error ? error.message : String(error)}`);
             throw error;
         }
     }

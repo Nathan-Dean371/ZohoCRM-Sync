@@ -127,7 +127,7 @@ Complete the existing Ventrata-to-Zoho booking webhook path and add a durable, a
 
 - `GET /admin/ventrata-integration`: Renders `views/admin-ventrata-integration.ejs`.
 - `POST /api/integrations/ventrata/webhook/register`: Generates, encrypts, and stores `X-Webhook-Secret`, and registers the webhook via `VentrataService`.
-- `POST /api/integrations/ventrata/import`: Enqueues `process-ventrata-import` job given `bookingDateStart` and `bookingDateEnd`. The worker filters by `utcConfirmedAt` while paging through bookings because OCTO does not define a booking-confirmation date range filter.
+- `POST /api/integrations/ventrata/import`: Enqueues `process-ventrata-import` job given `bookingDateStart` and `bookingDateEnd`. The worker queries by `utcCreatedAtStart` and `utcCreatedAtEnd` and uses Ventrata's `perPage` pagination.
 - `GET /api/integrations/ventrata/import/status`: Returns current/latest `VentrataImportJob` state and counts.
 
 ## Release Blockers

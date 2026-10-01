@@ -33,7 +33,7 @@ router.post('/api/integrations/ventrata/webhook/register', async (req: Request, 
             webhook: result
         });
     } catch (error: any) {
-        console.error('Failed to register Ventrata webhook:', error);
+        console.error(`Failed to register Ventrata webhook: ${error instanceof Error ? error.message : String(error)}`);
         res.status(error.statusCode || 500).json({
             success: false,
             error: error.message || 'Failed to register webhook'

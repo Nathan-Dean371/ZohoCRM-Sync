@@ -119,7 +119,7 @@ export const webhookWorker = new Worker(
         });
       }
     } catch (error: any) {
-      console.error(`Error processing job ${job.id}:`, error);
+      console.error(`Error processing job ${job.id}: ${error instanceof Error ? error.message : String(error)}`);
 
       const retryable = !isNonRetryableError(error);
       const failureClass: FailureClass = retryable ? 'transient' : 'permanent';
@@ -179,7 +179,7 @@ webhookWorker.on('ready', () => {
 });
 
 webhookWorker.on('error', (err) => {
-  console.error('❌ Webhook worker error:', err);
+  console.error(`❌ Webhook worker error: ${err instanceof Error ? err.message : String(err)}`);
 });
 
 console.log('🔧 Webhook worker module loaded...');

@@ -12,7 +12,7 @@ describe('VentrataService', () => {
         ventrataService = new VentrataService('test-api-key');
     });
 
-    test('getBookings should fetch bookings with date range and page parameters', async () => {
+    test('getBookings should fetch bookings with booking-created date range and pagination parameters', async () => {
         mockedAxios.get.mockResolvedValue({
             data: [
                 {
@@ -24,10 +24,10 @@ describe('VentrataService', () => {
         } as any);
 
         const bookings = await ventrataService.getBookings({
-            localDateStart: '2026-01-01',
-            localDateEnd: '2026-01-31',
+            utcCreatedAtStart: '2026-01-01T00:00:00.000Z',
+            utcCreatedAtEnd: '2026-01-31T23:59:59.999Z',
             page: 2,
-            limit: 50
+            perPage: 50
         });
 
         expect(Array.isArray(bookings)).toBe(true);
@@ -36,10 +36,10 @@ describe('VentrataService', () => {
             'https://api.ventrata.com/octo/bookings',
             expect.objectContaining({
                 params: {
-                    localDateStart: '2026-01-01',
-                    localDateEnd: '2026-01-31',
+                    utcCreatedAtStart: '2026-01-01T00:00:00.000Z',
+                    utcCreatedAtEnd: '2026-01-31T23:59:59.999Z',
                     page: 2,
-                    limit: 50
+                    perPage: 50
                 }
             })
         );

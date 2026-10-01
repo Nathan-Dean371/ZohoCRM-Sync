@@ -8,10 +8,12 @@ export interface BookingFilters {
     localDate?: string;
     localDateStart?: string;
     localDateEnd?: string;
+    utcCreatedAtStart?: string;
+    utcCreatedAtEnd?: string;
     productId?: string;
     optionId?: string;
     page?: number;
-    limit?: number;
+    perPage?: number;
 }
 
 class VentrataService {
@@ -21,9 +23,6 @@ class VentrataService {
     constructor(apiKey?: string) {
         this.apiKey = apiKey || process.env.VENTRATA_API_KEY || '';
         this.baseUrl = process.env.VENTRATA_BASE_URL || 'https://api.ventrata.com/octo';
-
-        console.log("Ventrata Base URL:", this.baseUrl);
-        console.log("API Key loaded (first 5 chars):", this.apiKey.substring(0, 5) + "...");
 
         if (!this.apiKey) {
             throw new Error('Ventrata API key is not configured');
@@ -44,9 +43,6 @@ class VentrataService {
      */
     async getWebhooks(): Promise<any[]> {
         try {
-            // ADD THESE LOGS:
-            console.log(`Sending GET request to: ${this.baseUrl}/webhooks`);
-            console.log('With Headers:', this.getHeaders());
             const response = await axios.get(`${this.baseUrl}/webhooks`, {
                 headers: this.getHeaders()
             });
