@@ -253,6 +253,39 @@ describe('ZohoCRMService', () => {
             );
         });
 
+        test('recovers when a concurrent booking create returns duplicate data', async () => {
+            const testBooking = {
+                Booking_Ref: 'CONCURRENT-REF',
+                Name: 'Updated Booking',
+                Product: 'Updated Product',
+                Travel_Date: '2022-01-01',
+                Booking_Date: '2021-12-31'
+            };
+            const duplicateError = new Error(
+                'Invalid data: {"data":[{"code":"DUPLICATE_DATA","details":{"api_name":"Booking_Ref"}}]}'
+            );
+
+            (crmService as any).client.get
+                .mockResolvedValueOnce({ data: { data: [] } })
+                .mockResolvedValueOnce({
+                    data: { data: [{ id: 'BOOKING-WINNER', Booking_Ref: 'CONCURRENT-REF' }] }
+                });
+            (crmService as any).client.post.mockRejectedValue(duplicateError);
+            (crmService as any).client.put.mockResolvedValue({
+                data: { data: [{ code: 'SUCCESS', details: { id: 'BOOKING-WINNER' } }] }
+            });
+
+            const result = await crmService.upsertBooking(testBooking as any);
+
+            expect(result.id).toBe('BOOKING-WINNER');
+            expect((crmService as any).client.get).toHaveBeenCalledTimes(2);
+            expect((crmService as any).client.put).toHaveBeenCalledWith(
+                '/Bookings/BOOKING-WINNER',
+                { data: [testBooking] },
+                expect.any(Object)
+            );
+        });
+
         test('recomputes Booking_Count on the contact after create and after update', async () => {
             const testBooking = {
                 Booking_Ref: 'NEW-REF',

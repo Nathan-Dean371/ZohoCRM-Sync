@@ -179,7 +179,21 @@ class ZohoCRMService {
                 result = await this.updateBooking(existingBooking.id!, booking);
             } else {
                 console.log('No existing booking found, creating new booking');
-                result = await this.createBooking(booking);
+                try {
+                    result = await this.createBooking(booking);
+                } catch (error) {
+                    if (!this.isDuplicateBookingError(error)) {
+                        throw error;
+                    }
+
+                    const duplicateBooking = await this.findBookingByRef(booking.Booking_Ref);
+                    if (!duplicateBooking?.id) {
+                        throw error;
+                    }
+
+                    console.log('Recovered concurrent booking create for ref:', booking.Booking_Ref);
+                    result = await this.updateBooking(duplicateBooking.id, booking);
+                }
             }
 
             if (result.Contact_Id) {
@@ -342,6 +356,11 @@ class ZohoCRMService {
     }
 
     private isDuplicateContactError(error: unknown): boolean {
+        return error instanceof Error
+            && /(duplicate_data|duplicate data|already exists)/i.test(error.message);
+    }
+
+    private isDuplicateBookingError(error: unknown): boolean {
         return error instanceof Error
             && /(duplicate_data|duplicate data|already exists)/i.test(error.message);
     }
