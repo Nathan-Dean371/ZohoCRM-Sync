@@ -35,13 +35,19 @@ interface VentrataBooking {
     
     // Additional fields
     notes: string | null;
-    // Pricing & Currency
-    netAmount?: number | null;
-    currency?: string | null;
-    currencyPrecision?: number | null;
+    // Pricing & Currency (requires the octo/pricing capability)
+    pricing?: VentrataPricing | null;
 
     product: VentrataProduct;
     prodcutId: string;
+}
+
+interface VentrataPricing {
+    original: number;
+    retail: number;
+    net: number | null;
+    currency: string;
+    currencyPrecision: number;
 }
 
 interface VentrataContact {

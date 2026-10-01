@@ -81,14 +81,18 @@ describe('VentrataWebhookHandler', () => {
         }));
     });
 
-    it('should convert netAmount using currencyPrecision and set currency', async () => {
+    it('should convert pricing.net using currencyPrecision and set currency', async () => {
         const pricingEvent = {
             ...mockEvent,
             booking: {
                 ...mockEvent.booking,
-                netAmount: 15550,
-                currencyPrecision: 2,
-                currency: 'EUR'
+                pricing: {
+                    original: 15550,
+                    retail: 15550,
+                    net: 15550,
+                    currencyPrecision: 2,
+                    currency: 'EUR'
+                }
             }
         } as any;
 

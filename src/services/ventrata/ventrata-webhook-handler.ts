@@ -77,10 +77,10 @@ class VentrataWebhookHandler {
             console.log(`Booking ${booking.uuid} has no email or phone. Syncing booking without Contact_Id.`);
         }
 
-        // Net amount minor units conversion and currency mapping
-        const precision = typeof booking.currencyPrecision === 'number' ? booking.currencyPrecision : 2;
-        const bookingAmount = typeof booking.netAmount === 'number' ? booking.netAmount / Math.pow(10, precision) : undefined;
-        const currency = booking.currency || undefined;
+        // Net amount minor units conversion and currency mapping (requires the octo/pricing capability)
+        const precision = typeof booking.pricing?.currencyPrecision === 'number' ? booking.pricing.currencyPrecision : 2;
+        const bookingAmount = typeof booking.pricing?.net === 'number' ? booking.pricing.net / Math.pow(10, precision) : undefined;
+        const currency = booking.pricing?.currency || undefined;
 
         const bookingData = this.extractBookingData(booking);
         const bookingStatus = this.mapBookingStatus(booking.status);

@@ -34,7 +34,8 @@ class VentrataService {
         return {
             'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
-            'Octo-Capabilities': 'octo/webhooks',
+            // octo/pricing is required for the API to include the booking `pricing` object (net amount/currency)
+            'Octo-Capabilities': 'octo/webhooks, octo/pricing',
         };
     }
 
