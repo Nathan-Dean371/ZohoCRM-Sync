@@ -43,25 +43,25 @@ router.post('/api/integrations/ventrata/webhook/register', async (req: Request, 
 
 /**
  * POST /api/integrations/ventrata/import
- * Enqueues a historical booking import job for specified travel-date range
+ * Enqueues a historical booking import job for specified booking-date range
  */
 router.post('/api/integrations/ventrata/import', async (req: Request, res: Response) => {
     try {
-        const { travelDateStart, travelDateEnd } = req.body;
+        const { bookingDateStart, bookingDateEnd } = req.body;
 
-        if (!travelDateStart || !travelDateEnd) {
-            throw new AppError(400, 'travelDateStart and travelDateEnd are required');
+        if (!bookingDateStart || !bookingDateEnd) {
+            throw new AppError(400, 'bookingDateStart and bookingDateEnd are required');
         }
 
-        const startDate = new Date(travelDateStart);
-        const endDate = new Date(travelDateEnd);
+        const startDate = new Date(bookingDateStart);
+        const endDate = new Date(bookingDateEnd);
 
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-            throw new AppError(400, 'Invalid travelDateStart or travelDateEnd date format');
+            throw new AppError(400, 'Invalid bookingDateStart or bookingDateEnd date format');
         }
 
         if (startDate > endDate) {
-            throw new AppError(400, 'travelDateStart must be before or equal to travelDateEnd');
+            throw new AppError(400, 'bookingDateStart must be before or equal to bookingDateEnd');
         }
 
         const companyId = req.user?.company_id;

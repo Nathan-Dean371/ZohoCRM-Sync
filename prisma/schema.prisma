@@ -158,8 +158,8 @@ model VentrataImportJob {
   id                    String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   company_id            String    @db.Uuid
   status                String    @db.VarChar(20) // "in_progress", "completed", "failed"
-  travel_date_start     DateTime  @db.Timestamptz(6)
-  travel_date_end       DateTime  @db.Timestamptz(6)
+  booking_date_start    DateTime  @db.Timestamptz(6)
+  booking_date_end      DateTime  @db.Timestamptz(6)
   current_page          Int       @default(1)
   bookings_processed    Int       @default(0)
   bookings_failed       Int       @default(0)

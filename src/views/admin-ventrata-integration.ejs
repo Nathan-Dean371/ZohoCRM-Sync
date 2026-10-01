@@ -207,23 +207,23 @@
                 <div id="webhookResponseBox" class="responseBox">Click "Register / Repair Webhook" to register or update the Ventrata webhook subscription with a secure encrypted secret.</div>
             </section>
 
-            <!-- Bounded Travel-Date Historical Import Section -->
+            <!-- Bounded Booking-Date Historical Import Section -->
             <section class="card ventrata-card">
                 <div class="ventrata-hero">
                     <h2 style="margin: 0;">Historical Booking Import</h2>
                     <p class="subtle">
-                        Run a durable background job to import historical bookings for a specific travel-date range into Zoho CRM.
+                        Run a durable background job to import historical bookings for a specific booking-date range into Zoho CRM.
                     </p>
                 </div>
 
                 <div class="ventrata-grid">
                     <div>
-                        <label class="fieldLabel" for="travelDateStart">Travel Date Start</label>
-                        <input id="travelDateStart" class="fieldInput" type="date" required>
+                        <label class="fieldLabel" for="bookingDateStart">Booking Date Start</label>
+                        <input id="bookingDateStart" class="fieldInput" type="date" required>
                     </div>
                     <div>
-                        <label class="fieldLabel" for="travelDateEnd">Travel Date End</label>
-                        <input id="travelDateEnd" class="fieldInput" type="date" required>
+                        <label class="fieldLabel" for="bookingDateEnd">Booking Date End</label>
+                        <input id="bookingDateEnd" class="fieldInput" type="date" required>
                     </div>
                 </div>
 
@@ -232,7 +232,7 @@
                     <button id="refreshStatusButton" type="button" class="actionButton secondary">Refresh Status</button>
                 </div>
 
-                <div id="importResponseBox" class="responseBox">Select travel dates and click "Start Historical Import" to begin backfilling bookings.</div>
+                <div id="importResponseBox" class="responseBox">Select booking dates and click "Start Historical Import" to begin backfilling bookings.</div>
 
                 <div id="jobDetailsBox" class="sync-status" style="<%= latestJob ? '' : 'display: none;' %>">
                     <div class="sync-stat">
@@ -244,12 +244,12 @@
                         <span class="sync-stat-value" id="jobStatus"><%= latestJob ? latestJob.status : '-' %></span>
                     </div>
                     <div class="sync-stat">
-                        <span class="sync-stat-label">Travel Start:</span>
-                        <span class="sync-stat-value" id="jobTravelStart"><%= latestJob ? new Date(latestJob.travelDateStart).toLocaleDateString() : '-' %></span>
+                        <span class="sync-stat-label">Booking Start:</span>
+                        <span class="sync-stat-value" id="jobBookingStart"><%= latestJob ? new Date(latestJob.bookingDateStart).toLocaleDateString() : '-' %></span>
                     </div>
                     <div class="sync-stat">
-                        <span class="sync-stat-label">Travel End:</span>
-                        <span class="sync-stat-value" id="jobTravelEnd"><%= latestJob ? new Date(latestJob.travelDateEnd).toLocaleDateString() : '-' %></span>
+                        <span class="sync-stat-label">Booking End:</span>
+                        <span class="sync-stat-value" id="jobBookingEnd"><%= latestJob ? new Date(latestJob.bookingDateEnd).toLocaleDateString() : '-' %></span>
                     </div>
                     <div class="sync-stat">
                         <span class="sync-stat-label">Current Page:</span>
@@ -289,15 +289,15 @@
             const importResponseBox = document.getElementById('importResponseBox');
             const jobDetailsBox = document.getElementById('jobDetailsBox');
 
-            const travelDateStart = document.getElementById('travelDateStart');
-            const travelDateEnd = document.getElementById('travelDateEnd');
+            const bookingDateStart = document.getElementById('bookingDateStart');
+            const bookingDateEnd = document.getElementById('bookingDateEnd');
 
             // Default dates: last 30 days to today
             const today = new Date();
             const lastMonth = new Date();
             lastMonth.setDate(today.getDate() - 30);
-            travelDateStart.value = lastMonth.toISOString().split('T')[0];
-            travelDateEnd.value = today.toISOString().split('T')[0];
+            bookingDateStart.value = lastMonth.toISOString().split('T')[0];
+            bookingDateEnd.value = today.toISOString().split('T')[0];
 
             async function postJson(url, body) {
                 const response = await fetch(url, {
@@ -315,8 +315,8 @@
                 jobDetailsBox.style.display = 'block';
                 document.getElementById('jobId').textContent = job.id || '-';
                 document.getElementById('jobStatus').textContent = job.status || '-';
-                document.getElementById('jobTravelStart').textContent = job.travelDateStart ? new Date(job.travelDateStart).toLocaleDateString() : '-';
-                document.getElementById('jobTravelEnd').textContent = job.travelDateEnd ? new Date(job.travelDateEnd).toLocaleDateString() : '-';
+                document.getElementById('jobBookingStart').textContent = job.bookingDateStart ? new Date(job.bookingDateStart).toLocaleDateString() : '-';
+                document.getElementById('jobBookingEnd').textContent = job.bookingDateEnd ? new Date(job.bookingDateEnd).toLocaleDateString() : '-';
                 document.getElementById('jobCurrentPage').textContent = job.currentPage || 1;
                 document.getElementById('jobBookingsProcessed').textContent = job.bookingsProcessed || 0;
                 document.getElementById('jobBookingsFailed').textContent = job.bookingsFailed || 0;
@@ -336,8 +336,8 @@
             });
 
             startImportButton.addEventListener('click', async () => {
-                if (!travelDateStart.value || !travelDateEnd.value) {
-                    importResponseBox.textContent = 'Please select both start and end travel dates.';
+                if (!bookingDateStart.value || !bookingDateEnd.value) {
+                    importResponseBox.textContent = 'Please select both start and end booking dates.';
                     return;
                 }
 
@@ -346,8 +346,8 @@
 
                 try {
                     const res = await postJson('/api/integrations/ventrata/import', {
-                        travelDateStart: travelDateStart.value,
-                        travelDateEnd: travelDateEnd.value
+                        bookingDateStart: bookingDateStart.value,
+                        bookingDateEnd: bookingDateEnd.value
                     });
                     importResponseBox.textContent = 'Historical import job queued successfully!';
                     renderJobStatus(res.job);

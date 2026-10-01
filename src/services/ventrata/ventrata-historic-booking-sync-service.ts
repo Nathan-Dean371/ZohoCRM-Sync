@@ -9,8 +9,8 @@ export interface VentrataImportJobStatus {
     id: string;
     companyId: string;
     status: 'in_progress' | 'completed' | 'failed';
-    travelDateStart: Date;
-    travelDateEnd: Date;
+    bookingDateStart: Date;
+    bookingDateEnd: Date;
     currentPage: number;
     bookingsProcessed: number;
     bookingsFailed: number;
@@ -27,15 +27,15 @@ export class VentrataHistoricBookingSyncService {
     ) {}
 
     /**
-     * Starts a new historical Ventrata booking import job bounded by travel dates
+    * Starts a new historical Ventrata booking import job bounded by booking dates
      */
-    async startImport(companyId: string, travelDateStart: Date, travelDateEnd: Date): Promise<VentrataImportJobStatus> {
+    async startImport(companyId: string, bookingDateStart: Date, bookingDateEnd: Date): Promise<VentrataImportJobStatus> {
         const job = await prisma.ventrataImportJob.create({
             data: {
                 company_id: companyId,
                 status: 'in_progress',
-                travel_date_start: travelDateStart,
-                travel_date_end: travelDateEnd,
+                booking_date_start: bookingDateStart,
+                booking_date_end: bookingDateEnd,
                 current_page: 1,
                 bookings_processed: 0,
                 bookings_failed: 0,
@@ -73,8 +73,8 @@ export class VentrataHistoricBookingSyncService {
             });
         }
 
-        const travelDateStartStr = job.travel_date_start.toISOString().split('T')[0];
-        const travelDateEndStr = job.travel_date_end.toISOString().split('T')[0];
+        const bookingDateStartStr = job.booking_date_start.toISOString().split('T')[0];
+        const bookingDateEndStr = job.booking_date_end.toISOString().split('T')[0];
 
         let currentPage = job.current_page || 1;
         let bookingsProcessed = job.bookings_processed || 0;
@@ -90,8 +90,6 @@ export class VentrataHistoricBookingSyncService {
                 let bookings = [];
                 try {
                     bookings = await this.ventrataService.getBookings({
-                        localDateStart: travelDateStartStr,
-                        localDateEnd: travelDateEndStr,
                         page: currentPage,
                         limit: pageSize
                     });
@@ -129,7 +127,12 @@ export class VentrataHistoricBookingSyncService {
                     return this.mapJobToStatus(updated);
                 }
 
-                for (const booking of bookings) {
+                const bookingsInDateRange = bookings.filter(booking => {
+                    const bookingDate = booking.utcConfirmedAt?.slice(0, 10);
+                    return bookingDate && bookingDate >= bookingDateStartStr && bookingDate <= bookingDateEndStr;
+                });
+
+                for (const booking of bookingsInDateRange) {
                     try {
                         const result = await this.webhookHandler.processBooking(booking);
                         bookingsProcessed++;
@@ -211,8 +214,8 @@ export class VentrataHistoricBookingSyncService {
             id: job.id,
             companyId: job.company_id,
             status: job.status,
-            travelDateStart: job.travel_date_start,
-            travelDateEnd: job.travel_date_end,
+            bookingDateStart: job.booking_date_start,
+            bookingDateEnd: job.booking_date_end,
             currentPage: job.current_page,
             bookingsProcessed: job.bookings_processed,
             bookingsFailed: job.bookings_failed,
