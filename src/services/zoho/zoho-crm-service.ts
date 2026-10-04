@@ -186,13 +186,15 @@ class ZohoCRMService {
                         throw error;
                     }
 
-                    const duplicateBooking = await this.findBookingByRef(booking.Booking_Ref);
-                    if (!duplicateBooking?.id) {
+                    // Zoho search can lag behind its unique-field check, so prefer the ID Zoho reports.
+                    const duplicateId = this.extractDuplicateRecordId(error)
+                        ?? (await this.findBookingByRef(booking.Booking_Ref))?.id;
+                    if (!duplicateId) {
                         throw error;
                     }
 
                     console.log('Recovered concurrent booking create for ref:', booking.Booking_Ref);
-                    result = await this.updateBooking(duplicateBooking.id, booking);
+                    result = await this.updateBooking(duplicateId, booking);
                 }
             }
 
@@ -358,6 +360,19 @@ class ZohoCRMService {
     private isDuplicateContactError(error: unknown): boolean {
         return error instanceof Error
             && /(duplicate_data|duplicate data|already exists)/i.test(error.message);
+    }
+
+    private extractDuplicateRecordId(error: unknown): string | null {
+        if (!(error instanceof Error)) return null;
+        const start = error.message.indexOf('{');
+        if (start === -1) return null;
+        try {
+            const parsed = JSON.parse(error.message.slice(start));
+            const id = parsed?.data?.[0]?.details?.duplicate_record?.id;
+            return typeof id === 'string' && id ? id : null;
+        } catch {
+            return null;
+        }
     }
 
     private isDuplicateBookingError(error: unknown): boolean {

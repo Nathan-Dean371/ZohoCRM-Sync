@@ -286,6 +286,44 @@ describe('ZohoCRMService', () => {
             );
         });
 
+        test('updates the record named in the duplicate error when search cannot find it', async () => {
+            const testBooking = {
+                Booking_Ref: 'LAGGING-REF',
+                Name: 'Booking',
+                Product: 'Product',
+                Travel_Date: '2022-01-01',
+                Booking_Date: '2021-12-31'
+            };
+            const duplicateError = new Error(
+                'Invalid data: {"data":[{"code":"DUPLICATE_DATA","details":{"api_name":"Booking_Ref","duplicate_record":{"id":"BOOKING-FROM-ERROR"}}}]}'
+            );
+
+            (crmService as any).client.get.mockResolvedValue({ data: { data: [] } });
+            (crmService as any).client.post.mockRejectedValue(duplicateError);
+            (crmService as any).client.put.mockResolvedValue({
+                data: { data: [{ code: 'SUCCESS', details: { id: 'BOOKING-FROM-ERROR' } }] }
+            });
+
+            const result = await crmService.upsertBooking(testBooking as any);
+
+            expect(result.id).toBe('BOOKING-FROM-ERROR');
+            expect((crmService as any).client.put).toHaveBeenCalledWith(
+                '/Bookings/BOOKING-FROM-ERROR',
+                { data: [testBooking] },
+                expect.any(Object)
+            );
+        });
+
+        test('rethrows a duplicate error when no record ID is available anywhere', async () => {
+            const testBooking = { Booking_Ref: 'GONE-REF', Name: 'Booking', Product: 'P' };
+            const duplicateError = new Error('Invalid data: {"data":[{"code":"DUPLICATE_DATA"}]}');
+
+            (crmService as any).client.get.mockResolvedValue({ data: { data: [] } });
+            (crmService as any).client.post.mockRejectedValue(duplicateError);
+
+            await expect(crmService.upsertBooking(testBooking as any)).rejects.toBe(duplicateError);
+        });
+
         test('recomputes Booking_Count on the contact after create and after update', async () => {
             const testBooking = {
                 Booking_Ref: 'NEW-REF',
