@@ -4,47 +4,29 @@
     <title><%= title %></title>
     <link rel="stylesheet" href="/css/home.css">
     <link rel="stylesheet" href="/css/admin.css">
-    <style>
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.8em;
-            font-weight: bold;
-        }
-        .status-success { background: #d4edda; color: #155724; }
-        .status-failed { background: #f8d7da; color: #721c24; }
-        .status-processing { background: #fff3cd; color: #856404; }
-        .status-received { background: #e2e3e5; color: #383d41; }
-        .status-retrying { background: #cce5ff; color: #004085; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; color: #fff; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; color: #fff; }
-        th { color: #222; }
-        tr:hover { background-color: rgba(255, 255, 255, 0.12); }
-        
-        .filters { margin-bottom: 20px; }
-        .requeue-btn { 
-            background: #007bff; color: white; border: none; padding: 5px 10px; 
-            border-radius: 4px; cursor: pointer; 
-        }
-        .requeue-btn:disabled { background: #ccc; cursor: not-allowed; }
-        
-        .error-text { color: #dc3545; font-size: 0.9em; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-        .error-text:hover { white-space: normal; }
-        .diagnostics-text { color: #495057; font-size: 0.85em; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-        .diagnostics-text:hover { white-space: normal; }
-    </style>
+    <link rel="stylesheet" href="/css/webhook-logs.css">
 </head>
-<body>
+<body class="webhookLogsBody">
     <%- include('navbar'); -%>
 
-    <main>
-        <div class="adminDashboardContainer">
-            <h1>Webhook Logs & Dead Letter Queue</h1>
+    <main class="webhookLogsPage">
+        <div class="webhookLogsContainer">
+            <header class="webhookLogsHeader">
+                <div>
+                    <p class="webhookLogsEyebrow">SYSTEM ACTIVITY</p>
+                    <h1>Webhook Logs</h1>
+                    <p class="webhookLogsDescription">Review incoming events and replay failed jobs.</p>
+                </div>
+                <a href="/admin/dashboard" class="webhookBackButton">Back to Dashboard</a>
+            </header>
             
-            <div class="filters">
+            <section class="webhookFilters" aria-label="Webhook log filters">
+                <div class="webhookFiltersIntro">
+                    <h2>Event history</h2>
+                    <p>Filter recent webhook activity by status.</p>
+                </div>
                 <form action="/admin/dashboard/webhook-logs" method="GET">
-                    <label for="status">Filter by Status:</label>
+                    <label for="status">Status</label>
                     <select name="status" id="status" onchange="this.form.submit()">
                         <option value="">All</option>
                         <option value="RECEIVED" <%= statusFilter === 'RECEIVED' ? 'selected' : '' %>>Received</option>
@@ -54,53 +36,53 @@
                         <option value="FAILED" <%= statusFilter === 'FAILED' ? 'selected' : '' %>>Failed (DLQ)</option>
                     </select>
                 </form>
-            </div>
+            </section>
 
-            <table>
-                <thead>
-                    <tr>
-                        <th>Created At</th>
-                        <th>Processed At</th>
-                        <th>Status</th>
-                        <th>Attempts</th>
-                        <th>Failure Class</th>
-                        <th>Last Error</th>
-                        <th>Diagnostics</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% if (logs.length === 0) { %>
-                        <tr><td colspan="7">No logs found.</td></tr>
-                    <% } %>
-                    <% logs.forEach(log => { %>
-                        <tr>
-                            <td><%= log.created_at ? log.created_at.toLocaleString() : '-' %></td>
-                            <td><%= log.processed_at ? log.processed_at.toLocaleString() : '-' %></td>
-                            <td>
-                                <span class="status-badge status-<%= log.status.toLowerCase() %>">
-                                    <%= log.status %>
-                                </span>
-                            </td>
-                            <td><%= log.attempts %></td>
-                            <td><%= log.failure_class || '-' %></td>
-                            <td class="error-text" title="<%= log.last_error %>">
-                                <%= log.last_error || '-' %>
-                            </td>
-                            <td class="diagnostics-text" title="<%= JSON.stringify(log.failure_diagnostics || {}) %>">
-                                <%= log.failure_diagnostics ? JSON.stringify(log.failure_diagnostics) : '-' %>
-                            </td>
-                            <td>
-                                <button class="requeue-btn" onclick="replayJob('<%= log.id %>', '<%= log.status %>')">Replay</button>
-                            </td>
-                        </tr>
-                    <% }) %>
-                </tbody>
-            </table>
-            
-            <div style="margin-top: 20px;">
-                <a href="/admin/dashboard" class="cardButton">Back to Dashboard</a>
-            </div>
+            <section class="webhookTableCard" aria-label="Webhook logs">
+                <div class="webhookTableScroller">
+                    <table class="webhookLogsTable">
+                        <thead>
+                            <tr>
+                                <th scope="col">Created At</th>
+                                <th scope="col">Processed At</th>
+                                <th scope="col">Status</th>
+                                <th scope="col">Attempts</th>
+                                <th scope="col">Failure Class</th>
+                                <th scope="col">Last Error</th>
+                                <th scope="col">Diagnostics</th>
+                                <th scope="col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% if (logs.length === 0) { %>
+                                <tr><td class="webhookEmptyState" colspan="8">No webhook logs found.</td></tr>
+                            <% } %>
+                            <% logs.forEach(log => { %>
+                                <tr>
+                                    <td><%= log.created_at ? log.created_at.toLocaleString() : '-' %></td>
+                                    <td><%= log.processed_at ? log.processed_at.toLocaleString() : '-' %></td>
+                                    <td>
+                                        <span class="status-badge status-<%= log.status.toLowerCase() %>">
+                                            <%= log.status %>
+                                        </span>
+                                    </td>
+                                    <td><%= log.attempts %></td>
+                                    <td><%= log.failure_class || '-' %></td>
+                                    <td class="error-text" title="<%= log.last_error %>">
+                                        <%= log.last_error || '-' %>
+                                    </td>
+                                    <td class="diagnostics-text" title="<%= JSON.stringify(log.failure_diagnostics || {}) %>">
+                                        <%= log.failure_diagnostics ? JSON.stringify(log.failure_diagnostics) : '-' %>
+                                    </td>
+                                    <td>
+                                        <button class="requeue-btn" onclick="replayJob('<%= log.id %>', '<%= log.status %>')">Replay</button>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </div>
     </main>
 
