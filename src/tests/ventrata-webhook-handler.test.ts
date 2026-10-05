@@ -81,6 +81,27 @@ describe('VentrataWebhookHandler', () => {
         }));
     });
 
+    it('should skip Zoho sync for redeemed bookings and advance the stored update timestamp', async () => {
+        mockIdService.getZohoId.mockResolvedValue('zoho-booking-789');
+        const redeemedBooking = {
+            ...mockEvent.booking,
+            status: 'REDEEMED',
+            utcUpdatedAt: '2023-01-03T12:00:00Z'
+        } as any;
+
+        const result = await handler.processBooking(redeemedBooking);
+
+        expect(mockZohoService.upsertContact).not.toHaveBeenCalled();
+        expect(mockZohoService.upsertBooking).not.toHaveBeenCalled();
+        expect(mockIdService.saveMapping).toHaveBeenCalledWith(
+            'booking-uuid-456',
+            'zoho-booking-789',
+            'ventrata',
+            '2023-01-03T12:00:00Z'
+        );
+        expect(result).toEqual({ zohoBookingId: 'zoho-booking-789', missingContact: false });
+    });
+
     it('should convert pricing.net using currencyPrecision and set currency', async () => {
         const pricingEvent = {
             ...mockEvent,

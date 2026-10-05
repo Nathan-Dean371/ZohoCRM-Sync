@@ -52,6 +52,15 @@ class VentrataWebhookHandler {
             return { zohoBookingId: existingId || '', missingContact: false };
         }
 
+        if (booking.status === 'REDEEMED') {
+            const existingId = await this.idService.getZohoId(booking.uuid, 'ventrata');
+            if (existingId && booking.utcUpdatedAt) {
+                await this.idService.saveMapping(booking.uuid, existingId, 'ventrata', booking.utcUpdatedAt);
+            }
+            console.log(`Skipping Zoho sync for redeemed booking ${booking.uuid}`);
+            return { zohoBookingId: existingId || '', missingContact: false };
+        }
+
         const email = booking.contact?.emailAddress || null;
         const phone = booking.contact?.phoneNumber || null;
         const hasIdentity = Boolean(email || phone);
