@@ -4,6 +4,7 @@ import { getUserDetails } from '../services/database/databaseConnector';
 import { User } from '../types/users';
 import { user_role } from '../types/userRoles';
 import { AppError } from './errorHandler';
+import { getAuthCookieClearOptions } from '../config/auth-cookie';
 
 
 const checkForAuthToken = async (req : Request, res : Response, next : NextFunction) => {
@@ -33,18 +34,17 @@ const checkForAuthToken = async (req : Request, res : Response, next : NextFunct
         if(error instanceof jwt.TokenExpiredError)
         { 
             console.log('Token expired');
-            res.clearCookie('auth-token');
+            res.clearCookie('auth-token', getAuthCookieClearOptions());
             res.redirect('/');
         }
         else
         {
             console.log('JWT Error: ', error);
-            res.clearCookie('auth-token');
+            res.clearCookie('auth-token', getAuthCookieClearOptions());
             next(new AppError(401, 'Unauthorized'));
         }
     }
 };
 
 export const userAuthMiddleware = checkForAuthToken;
-
 

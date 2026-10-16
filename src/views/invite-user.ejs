@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="csrf-token" content="<%= csrfToken %>">
     <title>Invite User</title>
     <link rel="stylesheet" href="/css/home.css">
     <link rel="stylesheet" href="/css/invite.css">
@@ -19,6 +20,7 @@
             <div class="acceptInviteContainer">
                 <h2>Invite New User</h2>
                 <form class="inviteForm" action="/admin/invite/user" method="post">
+                    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                     <div class="formGroup">
                         <label for="companyId">Company</label>
                         <select name="companyId" id="companyId">

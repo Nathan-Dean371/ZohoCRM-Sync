@@ -99,7 +99,8 @@
                 const response = await fetch(`/admin/dashboard/webhook-logs/${logId}/requeue`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
                     }
                 });
                 const result = await response.json();

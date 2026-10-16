@@ -31,6 +31,7 @@
         <div id="accountInfo">
             <h1 id="loggedInFirstName"><%= user.first_name %></h1>
             <form action="/logout" method="POST">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                 <button id="logoutButton">Logout</button>
             </form>
         <% } %>

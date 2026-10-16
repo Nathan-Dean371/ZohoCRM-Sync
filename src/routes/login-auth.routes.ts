@@ -3,6 +3,7 @@ import { checkLoginDetails } from '../utils/userAuth';
 import { createJWTtoken } from '../utils/JWT-generator';
 import { getUserDetails } from '../services/database/databaseConnector';
 import { user_role } from "../types/userRoles";
+import { getAuthCookieOptions } from '../config/auth-cookie';
 
 
 
@@ -43,7 +44,7 @@ const tryToLoginUser: RequestHandler = async (req, res, next) => {
         
         // Create token and set cookie
         const token = createJWTtoken(userDetails);
-        res.cookie('auth-token', token, { httpOnly: true });
+        res.cookie('auth-token', token, getAuthCookieOptions());
 
         // Redirect based on role
         if (userDetails.role === user_role.ADMIN) {

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <meta name="csrf-token" content="<%= csrfToken %>">
         <title>Accept Invitation</title>
         <link rel="stylesheet" href="/css/home.css">
         <link rel="stylesheet" href="/css/invite.css">
@@ -27,6 +28,7 @@
                 <div class="acceptInviteContainer glassCard">
                     <h2>Create Your Account</h2>
                     <form class="inviteForm" action="/invite/accept" method="POST">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                         <input type="hidden" name="token" value="<%= token %>">
                         
                         <div class="formGroup">

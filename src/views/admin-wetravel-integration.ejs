@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="csrf-token" content="<%= csrfToken %>">
     <title>WeTravel Integration</title>
     <link rel="stylesheet" href="/css/home.css">
     <link rel="stylesheet" href="/css/admin.css">
@@ -424,7 +425,8 @@
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
                     },
                     body: JSON.stringify(body)
                 });

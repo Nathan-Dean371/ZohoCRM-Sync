@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="csrf-token" content="<%= csrfToken %>">
     <title>Ventrata Integration</title>
     <link rel="stylesheet" href="/css/home.css">
     <link rel="stylesheet" href="/css/admin.css">
@@ -302,7 +303,10 @@
             async function postJson(url, body) {
                 const response = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').content
+                    },
                     body: JSON.stringify(body)
                 });
                 const data = await response.json();

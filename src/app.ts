@@ -1,5 +1,10 @@
 import 'dotenv/config';
-import express, { Express, Request, Response, NextFunction } from 'express';
+import express, {
+  Express,
+  Request,
+  Response,
+  RequestHandler
+} from 'express';
 import webhookRoutes from './routes/webhook.routes';
 import apiKeyRoute from './routes/api-key.routes';
 import loginRoute from './routes/login-auth.routes';
@@ -23,7 +28,8 @@ import ventrataIntegrationRoutes from './routes/ventrata-integration.routes';
 import wetravelSyncRoutes from './routes/wetravel-sync.routes';
 import ZohoAuthService from './services/zoho/zoho-auth';
 import { integrationDataService } from './services/integrations/integration-config-service';
-import { webhookWorker } from './services/worker';
+import { requireEnv } from './config/env';
+import { getAuthCookieClearOptions } from './config/auth-cookie';
 
 declare module "express-session"
 {
@@ -43,18 +49,61 @@ declare module "express-session"
   }
 }
 
-const app: Express = express();
-app.use(session(
-  {
-    secret: process.env.SESSION_SECRET as string,
-    saveUninitialized: false,
-    resave: false
+const csrfProtection: RequestHandler = (req, res, next) => {
+  const safeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(req.method);
 
+  if (safeMethod || !req.cookies['auth-token']) {
+    next();
+    return;
   }
-));
+
+  const suppliedToken =
+    req.get('X-CSRF-Token') ??
+    (typeof req.body?._csrf === 'string' ? req.body._csrf : undefined);
+
+  if (!suppliedToken || !req.session.csrfToken) {
+    res.status(403).json({
+      success: false,
+      message: 'Invalid CSRF token'
+    });
+    return;
+  }
+
+  const supplied = Buffer.from(suppliedToken);
+  const expected = Buffer.from(req.session.csrfToken);
+
+  if (
+    supplied.length !== expected.length ||
+    !crypto.timingSafeEqual(supplied, expected)
+  ) {
+    res.status(403).json({
+      success: false,
+      message: 'Invalid CSRF token'
+    });
+    return;
+  }
+
+  next();
+};
+
+const app: Express = express();
+
+app.set('trust proxy', 1);
+app.use(session({
+  secret: requireEnv('SESSION_SECRET'),
+  saveUninitialized: false,
+  resave: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 8 * 60 * 60 * 1000
+  }}
+  ));
 
 // Apply Middleware
 EnableMiddleware(app);
+app.use(csrfProtection);
 // Apply auth middleware to all API routes
 EnableAuthMiddleware(app);
 // Apply role checking middlewate to all API routes
@@ -91,7 +140,7 @@ app.use('/', acceptInviteRoute);
 //#endregion
 
 app.post('/logout', (req: Request, res: Response) => {
-  res.clearCookie('auth-token');
+  res.clearCookie('auth-token', getAuthCookieClearOptions());
   res.redirect('/');
 });
 
@@ -140,8 +189,9 @@ function EnableMiddleware(app: express.Express) {
   app.use((req, res, next) => {
     // Generate CSRF token if it doesn't exist
     if (!req.session.csrfToken) {
-      req.session.csrfToken = crypto.randomBytes(16).toString('hex');
+      req.session.csrfToken = crypto.randomBytes(32).toString('hex');
     }
+    res.locals.csrfToken = req.session.csrfToken;
     next();
   });
 }

@@ -12,24 +12,7 @@ export class DevEmailService
 
     private async initializeTransporter() 
     {
-        //this.testAccount = await nodemailer.createTestAccount();
-
-
-        this.transporter = nodemailer.createTransport({
-            host: "smtp.ethereal.email",
-            port: 587,
-            secure: false,
-            auth: {
-                user: "vida0@ethereal.email",
-                pass: "GBuEWB685abzFkaaFU",
-            },
-        });
-
-        console.log("DevEmailService initialized", 
-        {
-            user : "vida0@ethereal.email",
-            previewUrl: 'https://ethereal.email',
-        });
+        
     }
 
     async sendUserInvite(invitation : 
